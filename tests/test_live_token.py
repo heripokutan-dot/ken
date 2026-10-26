@@ -45,10 +45,11 @@ def test_missing_api_key_returns_service_unavailable_without_secret(caplog):
 
 def test_success_returns_ephemeral_token_and_safe_metadata_only(caplog):
     fake = FakeTokenClient(token=type("Token", (), {"name": "short-lived-token"})())
-    response = client_for(token_client=fake).post(
-        "/api/live-token",
-        headers={"origin": "http://localhost"},
-    )
+    with caplog.at_level(logging.DEBUG):
+        response = client_for(token_client=fake).post(
+            "/api/live-token",
+            headers={"origin": "http://localhost"},
+        )
 
     assert response.status_code == 200
     assert response.json() == {
