@@ -39,7 +39,9 @@
 - Create `frontend/styles.css`: responsive accessible presentation and status/error styling.
 - Create `frontend/app.js`: session lifecycle, token request, Live WebSocket protocol, audio playback queue, transcript rendering, and cleanup.
 - Create `frontend/pcm-worklet.js`: microphone PCM16 conversion/resampling and chunk delivery.
+- Create `frontend/error-messages.js`: map browser permission/device failures to recoverable Japanese messages.
 - Create `tests/test_live_token.py`: mocked SDK tests for token endpoint and request security.
+- Create `tests/test_error_messages.mjs`: verify Japanese error mapping without a frontend build system.
 - Add audio conversion tests only if the resampling/PCM logic is factored into a deterministic testable helper; do not introduce a build system solely for tests.
 - Create `docs/superpowers/plans/2026-10-27-gemini-live-browser-app.md`: this plan.
 
@@ -84,6 +86,8 @@
 **Files:**
 - Create: `frontend/app.js`
 - Create: `frontend/pcm-worklet.js`
+- Create: `frontend/pcm-utils.js`
+- Create: `frontend/error-messages.js`
 
 **Interfaces:**
 - `startSession() -> Promise<void>` requests a token, establishes the Live session, obtains microphone access, and starts streaming.
