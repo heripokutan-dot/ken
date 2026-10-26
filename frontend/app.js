@@ -1,5 +1,5 @@
 import { pcm16ToFloat } from "./pcm-utils.js";
-import { userFacingError } from "./error-messages.js";
+import { userFacingError, tokenErrorMessage } from "./error-messages.js";
 
 const statusElement = document.querySelector("#status");
 const statusText = document.querySelector("#status-text");
@@ -347,21 +347,15 @@ async function startSession() {
       method: "POST",
       credentials: "same-origin",
       cache: "no-store",
-      headers: { Accept: "application/json" },
+      headers: { Accept: "application/json", "Content-Type": "application/json" },
+      body: "{}",
     });
-    const tokenData = await tokenResponse.json().catch(() => ({}));
     if (!tokenResponse.ok) {
-      if (tokenResponse.status === 503) {
-        throw new Error("サーバーに Gemini API キーが設定されていません。README の設定手順を確認してください。");
-      }
-      if (tokenResponse.status === 502) {
-        throw new Error("Gemini Live のトークンを作成できませんでした。API キー、利用権限、割り当てを確認してください。");
-      }
-      if (tokenResponse.status === 400 || tokenResponse.status === 403) {
-        throw new Error("ローカルサーバーへの接続が不正です。README の起動方法でアクセスしてください。");
-      }
-      throw new Error("セッショントークンを取得できませんでした。しばらくしてから再試行してください。");
+      throw new Error(tokenErrorMessage(tokenResponse.status));
     }
+    const tokenData = await tokenResponse.json().catch(() => {
+      throw new Error(tokenErrorMessage(401));
+    });
     if (typeof tokenData.token !== "string" || typeof tokenData.model !== "string" || typeof tokenData.websocket_url !== "string") {
       throw new Error("サーバーから不正なセッション情報が返されました。");
     }

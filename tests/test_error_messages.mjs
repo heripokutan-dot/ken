@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { userFacingError } from "../frontend/error-messages.js";
+import { userFacingError, tokenErrorMessage } from "../frontend/error-messages.js";
 
 test("microphone permission errors are explained in Japanese", () => {
   assert.equal(
@@ -26,4 +26,26 @@ test("unknown browser errors are sanitized into a Japanese recovery message", ()
     userFacingError(new Error("Failed to fetch")),
     "音声会話を開始できませんでした。ブラウザーのマイク権限とローカルサーバーの状態を確認して、もう一度お試しください。",
   );
+});
+
+test("token endpoint 401 asks the user to sign in again without exposing details", () => {
+  const message = tokenErrorMessage(401);
+  assert.match(message, /ログイン/);
+});
+
+test("token endpoint 403 explains the account is not permitted", () => {
+  assert.match(tokenErrorMessage(403), /許可されていない/);
+});
+
+test("token endpoint 429 asks the user to wait before retrying", () => {
+  assert.match(tokenErrorMessage(429), /しばらく/);
+});
+
+test("token endpoint 503 and 502 give recovery guidance", () => {
+  assert.match(tokenErrorMessage(503), /設定/);
+  assert.match(tokenErrorMessage(502), /トークン/);
+});
+
+test("unknown token endpoint statuses fall back to a retry message", () => {
+  assert.match(tokenErrorMessage(500), /再試行/);
 });
