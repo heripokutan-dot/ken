@@ -50,6 +50,7 @@ python -m uvicorn server:app --host 127.0.0.1 --port 8000
 ```bash
 python -m pytest -q
 node --test tests/test_pcm_utils.mjs
+node --test tests/test_error_messages.mjs
 ```
 
 ### セキュリティと制限
