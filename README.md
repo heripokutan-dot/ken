@@ -33,11 +33,17 @@ python -m uvicorn server:app --host 127.0.0.1 --port 8000
 
 ```powershell
 python -m pip install -r requirements.txt
-$env:GEMINI_API_KEY = Read-Host "Gemini API key"
+$secure = Read-Host "Gemini API key" -AsSecureString
+$pointer = [Runtime.InteropServices.Marshal]::SecureStringToBSTR($secure)
+try {
+  $env:GEMINI_API_KEY = [Runtime.InteropServices.Marshal]::PtrToStringBSTR($pointer)
+} finally {
+  [Runtime.InteropServices.Marshal]::ZeroFreeBSTR($pointer)
+}
 python -m uvicorn server:app --host 127.0.0.1 --port 8000
 ```
 
-その後、http://127.0.0.1:8000 を開きます。PowerShell では `Read-Host` の入力がマスクされない環境もあるため、必要ならユーザー環境変数などの安全な方法で API キーを設定してください。
+その後、http://127.0.0.1:8000 を開きます。サーバー停止後は `Remove-Item Env:GEMINI_API_KEY` で環境変数を削除してください。
 
 ### テスト
 
