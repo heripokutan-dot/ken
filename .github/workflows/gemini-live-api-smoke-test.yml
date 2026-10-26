@@ -1,0 +1,51 @@
+name: Gemini Live API smoke test
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  gemini-live-smoke-test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install Google Gen AI SDK
+        run: python -m pip install --upgrade google-genai
+
+      - name: Run offline tests
+        run: python -m unittest discover -s tests -v
+
+      - name: Check API key
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+        shell: bash
+        run: |
+          if [ -z "$GEMINI_API_KEY" ]; then
+            echo "::error::Missing GEMINI_API_KEY. Add it in Settings > Secrets and variables > Actions."
+            exit 1
+          fi
+
+      - name: Run Gemini Live API smoke test
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+        run: python scripts/gemini_live_smoke_test.py
+
+      - name: Upload response audio
+        uses: actions/upload-artifact@v4
+        with:
+          name: gemini-live-smoke-test
+          path: live-output/gemini-live-response.wav
+          if-no-files-found: error
+          retention-days: 7
