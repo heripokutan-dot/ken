@@ -333,13 +333,14 @@ async function startSession() {
         autoGainControl: true,
       },
     });
-    await audioContext.resume();
     const requestedStream = await microphoneRequest;
     if (runId !== lifecycle) {
       for (const track of requestedStream.getTracks()) track.stop();
       return;
     }
     microphoneStream = requestedStream;
+    await audioContext.resume();
+    if (runId !== lifecycle) return;
 
     const tokenResponse = await fetch("/api/live-token", {
       method: "POST",
