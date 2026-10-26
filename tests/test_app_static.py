@@ -8,6 +8,7 @@ def test_root_serves_japanese_voice_interface():
     assert response.status_code == 200
     assert "Gemini Live 音声会話" in response.text
     assert 'id="start-button"' in response.text
+    assert 'type="module" src="/static/app.js"' in response.text
 
 
 def test_static_stylesheet_is_served_from_same_origin():
