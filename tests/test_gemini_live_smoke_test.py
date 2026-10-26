@@ -101,7 +101,7 @@ class FakeClient:
 
 
 class RunLiveTestTests(unittest.IsolatedAsyncioTestCase):
-    def make_response(self, audio=b"\\x01\\x00\\x02\\x00", transcript="こんにちは"):
+    def make_response(self, audio=b"\x01\x00\x02\x00", transcript="こんにちは"):
         part = SimpleNamespace(inline_data=SimpleNamespace(data=audio))
         server_content = SimpleNamespace(
             model_turn=SimpleNamespace(parts=[part]) if audio is not None else None,
