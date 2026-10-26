@@ -1,0 +1,8 @@
+# Cloudflare Pages configuration for the hosted iPhone app. No account IDs, secrets, or hostnames here.
+# Set in the Pages dashboard (never in this file):
+#   Secret:    GEMINI_API_KEY
+#   Variables: ACCESS_TEAM_DOMAIN, ACCESS_AUDIENCE, ALLOWED_EMAIL
+#   Binding:   RATE_LIMITER (rate-limiting binding; see the setup guide — the endpoint fails closed without it)
+name = "ken-live"
+pages_build_output_dir = "frontend"
+compatibility_date = "2026-10-01"
