@@ -48,6 +48,28 @@ def _origin_matches_host(origin: str, host: str) -> bool:
     return parsed.netloc.lower() == host.lower() and _is_loopback_host(parsed.netloc)
 
 
+def _create_ephemeral_token(token_client: object) -> object:
+    now = dt.datetime.now(dt.timezone.utc)
+    return token_client.auth_tokens.create(
+        config={
+            "uses": 1,
+            "expire_time": now + dt.timedelta(minutes=30),
+            "new_session_expire_time": now + dt.timedelta(minutes=1),
+            "live_connect_constraints": {
+                "model": MODEL_ID,
+                "config": {
+                    "response_modalities": ["AUDIO"],
+                    "input_audio_transcription": {},
+                    "output_audio_transcription": {},
+                    "system_instruction": {
+                        "parts": [{"text": SYSTEM_INSTRUCTION}]
+                    },
+                },
+            },
+        }
+    )
+
+
 def create_app(*, api_key: str | None = None, token_client: object | None = None) -> FastAPI:
     configured_api_key = api_key if api_key is not None else os.getenv("GEMINI_API_KEY")
     app = FastAPI(title="Gemini Live Browser Voice App")
@@ -86,25 +108,7 @@ def create_app(*, api_key: str | None = None, token_client: object | None = None
                 client = genai.Client(api_key=configured_api_key)
                 app.state.token_client = client
 
-            now = dt.datetime.now(dt.timezone.utc)
-            token = client.auth_tokens.create(
-                config={
-                    "uses": 1,
-                    "expire_time": now + dt.timedelta(minutes=30),
-                    "new_session_expire_time": now + dt.timedelta(minutes=1),
-                    "live_connect_constraints": {
-                        "model": MODEL_ID,
-                        "config": {
-                            "response_modalities": ["AUDIO"],
-                            "input_audio_transcription": {},
-                            "output_audio_transcription": {},
-                            "system_instruction": {
-                                "parts": [{"text": SYSTEM_INSTRUCTION}]
-                            },
-                        },
-                    },
-                }
-            )
+            token = _create_ephemeral_token(client)
             token_value = getattr(token, "name", None)
             if not isinstance(token_value, str) or not token_value:
                 raise ValueError("Token response did not contain a token name")
