@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="color-scheme" content="light dark">
+    <title>Gemini Live 音声会話</title>
+    <link rel="stylesheet" href="/static/styles.css">
+    <script src="/static/app.js" defer></script>
+  </head>
+  <body>
+    <main class="app-shell">
+      <header class="page-header">
+        <p class="eyebrow">PERSONAL VOICE ASSISTANT</p>
+        <h1>Gemini Live 音声会話</h1>
+        <p class="intro">マイクに向かって話しかけると、Gemini が音声で返答します。音声や会話履歴はこのアプリには保存されません。</p>
+      </header>
+
+      <section class="session-panel" aria-labelledby="session-heading">
+        <div class="status-row">
+          <div>
+            <p class="section-label">SESSION</p>
+            <h2 id="session-heading">会話セッション</h2>
+          </div>
+          <p id="status" class="status-pill" data-state="idle" role="status" aria-live="polite">
+            <span class="status-dot" aria-hidden="true"></span>
+            <span id="status-text">未接続</span>
+          </p>
+        </div>
+
+        <p id="error-message" class="error-message" role="alert" hidden></p>
+
+        <div class="controls" aria-label="会話の操作">
+          <button id="start-button" class="button button-primary" type="button">会話を開始</button>
+          <button id="interrupt-button" class="button button-secondary" type="button" disabled>返答を中断</button>
+          <button id="stop-button" class="button button-quiet" type="button" disabled>終了</button>
+        </div>
+        <p class="help-text">開始するとマイクの使用許可を求めます。終了するとマイクと接続を停止します。</p>
+      </section>
+
+      <section class="transcript-grid" aria-label="会話の文字起こし">
+        <article class="transcript-card">
+          <div class="transcript-heading">
+            <span class="transcript-icon" aria-hidden="true">↗</span>
+            <h2>あなた</h2>
+          </div>
+          <p id="input-transcript" class="transcript-body" aria-live="polite">話した内容がここに表示されます。</p>
+        </article>
+        <article class="transcript-card transcript-card-assistant">
+          <div class="transcript-heading">
+            <span class="transcript-icon" aria-hidden="true">✳</span>
+            <h2>Gemini</h2>
+          </div>
+          <p id="output-transcript" class="transcript-body" aria-live="polite">Gemini の返答がここに表示されます。</p>
+        </article>
+      </section>
+
+      <footer class="page-footer">
+        <p>ローカル利用向けの試作アプリです。公開サーバーには配置しないでください。</p>
+      </footer>
+    </main>
+  </body>
+</html>
