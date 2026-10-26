@@ -1,0 +1,153 @@
+name: Gemini TTS style comparison
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  generate-tts-samples:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    env:
+      GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+    steps:
+      - name: Check API key
+        shell: bash
+        run: |
+          if [ -z "$GEMINI_API_KEY" ]; then
+            echo "::error::Missing GEMINI_API_KEY. Add it in Settings > Secrets and variables > Actions."
+            exit 1
+          fi
+
+      - name: Generate three WAV samples
+        shell: bash
+        run: |
+          python - <<'PY'
+          import base64
+          import json
+          import os
+          import sys
+          import urllib.error
+          import urllib.request
+          from pathlib import Path
+
+          API_URL = "https://generativelanguage.googleapis.com/v1beta/interactions"
+          MODEL = "gemini-3.8-flash-tts"
+          SAMPLE_TEXT = "こんにちは。今日は、音声生成AIの話し方を比べてみましょう。同じ文章でも、声の雰囲気によって伝わり方が変わります。"
+
+          styles = [
+              ("calm-natural.wav", "Speak in Japanese with calm, natural, clear narration. Use a relaxed pace and gentle warmth."),
+              ("bright-friendly.wav", "Speak in Japanese with a bright, friendly, upbeat tone. Sound approachable and cheerful, with clear articulation."),
+              ("dramatic-emotional.wav", "Speak in Japanese with expressive, dramatic emotion. Use deliberate pacing and emphasis while keeping the words intelligible."),
+          ]
+
+          def fail(message):
+              print(f"::error::{message}", file=sys.stderr)
+              raise SystemExit(1)
+
+          def find_audio(value):
+              if isinstance(value, dict):
+                  if value.get("type") == "audio":
+                      data = value.get("data")
+                      if isinstance(data, str) and data:
+                          return data
+                      inline = value.get("inline_data") or value.get("inlineData")
+                      if isinstance(inline, dict) and isinstance(inline.get("data"), str):
+                          return inline["data"]
+                  for child in value.values():
+                      found = find_audio(child)
+                      if found:
+                          return found
+              elif isinstance(value, list):
+                  for child in value:
+                      found = find_audio(child)
+                      if found:
+                          return found
+              return None
+
+          output_dir = Path("tts-output")
+          output_dir.mkdir(parents=True, exist_ok=True)
+
+          for filename, style in styles:
+              payload = {
+                  "model": MODEL,
+                  "input": [{
+                      "type": "user_input",
+                      "content": [{
+                          "type": "text",
+                          "text": SAMPLE_TEXT,
+                          "annotations": [{
+                              "type": "speech_metadata",
+                              "style": style
+                          }]
+                      }]
+                  }],
+                  "response_format": {"type": "audio"},
+                  "generation_config": {"speech_config": [{"voice": "Kore"}]}
+              }
+              request = urllib.request.Request(
+                  API_URL,
+                  data=json.dumps(payload, ensure_ascii=False).encode("utf-8"),
+                  headers={
+                      "Content-Type": "application/json",
+                      "x-goog-api-key": os.environ["GEMINI_API_KEY"],
+                  },
+                  method="POST",
+              )
+              try:
+                  with urllib.request.urlopen(request, timeout=120) as response:
+                      raw = response.read()
+                      status = response.status
+              except urllib.error.HTTPError as exc:
+                  details = exc.read().decode("utf-8", errors="replace")
+                  try:
+                      parsed = json.loads(details)
+                      message = parsed.get("error", {}).get("message", "No error details returned.")
+                  except (ValueError, AttributeError):
+                      message = "The API returned an unreadable error response."
+                  fail(f"Gemini API returned HTTP {exc.code} while generating {filename}: {message}")
+              except (urllib.error.URLError, TimeoutError) as exc:
+                  fail(f"Network error while generating {filename}: {type(exc).__name__}")
+
+              if not 200 <= status < 300:
+                  fail(f"Gemini API returned HTTP {status} while generating {filename}.")
+
+              try:
+                  result = json.loads(raw)
+              except ValueError:
+                  fail(f"Gemini API returned invalid JSON while generating {filename}.")
+
+              encoded = find_audio(result)
+              if not encoded:
+                  fail(f"No audio content was found in the API response for {filename}.")
+
+              try:
+                  audio = base64.b64decode(encoded, validate=True)
+              except (ValueError, base64.binascii.Error):
+                  fail(f"Audio data could not be decoded for {filename}.")
+
+              if len(audio) < 12 or audio[:4] != b"RIFF" or audio[8:12] != b"WAVE":
+                  fail(f"Audio data for {filename} is not a valid WAV file (RIFF/WAVE header missing).")
+
+              path = output_dir / filename
+              path.write_bytes(audio)
+              print(f"Created {path} ({len(audio)} bytes)")
+
+          expected = [output_dir / name for name, _ in styles]
+          missing = [str(path) for path in expected if not path.is_file() or path.stat().st_size == 0]
+          if missing:
+              fail("Expected audio files missing or empty: " + ", ".join(missing))
+          print("All three WAV samples were generated and validated.")
+          PY
+
+      - name: Upload WAV samples
+        uses: actions/upload-artifact@v4
+        with:
+          name: gemini-tts-style-comparison
+          path: tts-output/*.wav
+          if-no-files-found: error
+          retention-days: 7
