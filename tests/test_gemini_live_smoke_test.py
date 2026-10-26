@@ -1,13 +1,17 @@
 import asyncio
+import io
+import os
 import tempfile
 import unittest
 import wave
+from contextlib import redirect_stderr
 from types import SimpleNamespace
 from unittest.mock import patch
 from pathlib import Path
 
 from scripts.gemini_live_smoke_test import (
     collect_audio_bytes,
+    main,
     run_live_test,
     validate_api_key,
     write_wav,
@@ -151,6 +155,19 @@ class RunLiveTestTests(unittest.IsolatedAsyncioTestCase):
                 with self.assertRaises(TimeoutError):
                     await run_live_test("test-key", output)
             self.assertFalse(output.exists())
+
+    def test_main_reports_api_error_without_leaking_key(self):
+        with tempfile.TemporaryDirectory() as directory:
+            output = Path(directory) / "response.wav"
+            session = FakeSession([RuntimeError("API rejected key test-key")])
+            stderr = io.StringIO()
+            with patch("scripts.gemini_live_smoke_test._create_client", return_value=FakeClient(session)), patch.dict(
+                os.environ, {"GEMINI_API_KEY": "test-key"}
+            ), patch("scripts.gemini_live_smoke_test.OUTPUT_PATH", output), redirect_stderr(stderr):
+                status = main()
+            self.assertEqual(status, 1)
+            self.assertIn("API rejected key [REDACTED]", stderr.getvalue())
+            self.assertNotIn("test-key", stderr.getvalue())
 
 
 if __name__ == "__main__":
