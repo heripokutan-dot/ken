@@ -47,7 +47,7 @@ def test_success_returns_ephemeral_token_and_safe_metadata_only(caplog):
     fake = FakeTokenClient(token=type("Token", (), {"name": "short-lived-token"})())
     response = client_for(token_client=fake).post(
         "/api/live-token",
-        headers={"origin": "http://testserver"},
+        headers={"origin": "http://localhost"},
     )
 
     assert response.status_code == 200
@@ -69,7 +69,7 @@ def test_sdk_exception_is_sanitized_and_does_not_log_secrets(caplog):
     with caplog.at_level(logging.ERROR):
         response = client_for(token_client=fake).post(
             "/api/live-token",
-            headers={"origin": "http://testserver"},
+            headers={"origin": "http://localhost"},
         )
 
     assert response.status_code == 502
