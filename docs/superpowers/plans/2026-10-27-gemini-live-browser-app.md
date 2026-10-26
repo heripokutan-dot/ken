@@ -41,6 +41,7 @@
 - Create `frontend/pcm-worklet.js`: microphone PCM16 conversion/resampling and chunk delivery.
 - Create `frontend/error-messages.js`: map browser permission/device failures to recoverable Japanese messages.
 - Create `tests/test_live_token.py`: mocked SDK tests for token endpoint and request security.
+- Create `tests/test_app_static.py`: verify the Japanese page and same-origin static serving.
 - Create `tests/test_error_messages.mjs`: verify Japanese error mapping without a frontend build system.
 - Add audio conversion tests only if the resampling/PCM logic is factored into a deterministic testable helper; do not introduce a build system solely for tests.
 - Create `docs/superpowers/plans/2026-10-27-gemini-live-browser-app.md`: this plan.
