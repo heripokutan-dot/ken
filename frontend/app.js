@@ -1,0 +1,423 @@
+import { pcm16ToFloat } from "./pcm-utils.js";
+
+const statusElement = document.querySelector("#status");
+const statusText = document.querySelector("#status-text");
+const errorElement = document.querySelector("#error-message");
+const inputTranscriptElement = document.querySelector("#input-transcript");
+const outputTranscriptElement = document.querySelector("#output-transcript");
+const startButton = document.querySelector("#start-button");
+const interruptButton = document.querySelector("#interrupt-button");
+const stopButton = document.querySelector("#stop-button");
+
+const SYSTEM_INSTRUCTION =
+  "あなたは日本語で自然に会話する音声アシスタントです。" +
+  "簡潔で親しみやすく、相手の発話に直接答えてください。";
+const AUDIO_SAMPLE_RATE = 24000;
+const INPUT_MIME_TYPE = "audio/pcm;rate=16000";
+
+let lifecycle = 0;
+let isStarting = false;
+let isConnected = false;
+let socket = null;
+let audioContext = null;
+let microphoneStream = null;
+let microphoneSource = null;
+let captureNode = null;
+let mutedCaptureGain = null;
+let scheduledPlayback = new Set();
+let nextPlaybackTime = 0;
+let suppressPlayback = false;
+let committedInputTranscript = "";
+let interimInputTranscript = "";
+let outputTranscript = "";
+
+function setStatus(message, state) {
+  statusText.textContent = message;
+  statusElement.dataset.state = state;
+}
+
+function showError(message) {
+  errorElement.textContent = message;
+  errorElement.hidden = false;
+}
+
+function clearError() {
+  errorElement.textContent = "";
+  errorElement.hidden = true;
+}
+
+function updateControls() {
+  startButton.disabled = isStarting || isConnected;
+  interruptButton.disabled = !isConnected;
+  stopButton.disabled = !(isStarting || isConnected || socket || microphoneStream || audioContext);
+}
+
+function renderInputTranscript() {
+  const value = committedInputTranscript + interimInputTranscript;
+  inputTranscriptElement.textContent = value || "話した内容がここに表示されます。";
+}
+
+function resetTranscripts() {
+  committedInputTranscript = "";
+  interimInputTranscript = "";
+  outputTranscript = "";
+  renderInputTranscript();
+  outputTranscriptElement.textContent = "Gemini の返答がここに表示されます。";
+}
+
+function bytesToBase64(bytes) {
+  let binary = "";
+  for (let i = 0; i < bytes.length; i += 1) binary += String.fromCharCode(bytes[i]);
+  return btoa(binary);
+}
+
+function stopScheduledPlayback() {
+  for (const source of scheduledPlayback) {
+    try {
+      source.stop();
+    } catch {
+      // A source that already ended does not need additional handling.
+    }
+    try {
+      source.disconnect();
+    } catch {
+      // It may already be disconnected.
+    }
+  }
+  scheduledPlayback.clear();
+  nextPlaybackTime = audioContext ? audioContext.currentTime : 0;
+}
+
+function playAudioChunk(base64Data) {
+  if (suppressPlayback || !audioContext || audioContext.state === "closed") return;
+
+  const binary = atob(base64Data);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i += 1) bytes[i] = binary.charCodeAt(i);
+  const samples = pcm16ToFloat(bytes);
+  if (samples.length === 0) return;
+
+  const buffer = audioContext.createBuffer(1, samples.length, AUDIO_SAMPLE_RATE);
+  buffer.copyToChannel(samples, 0);
+  const source = audioContext.createBufferSource();
+  source.buffer = buffer;
+  source.connect(audioContext.destination);
+
+  const startAt = Math.max(audioContext.currentTime + 0.02, nextPlaybackTime);
+  nextPlaybackTime = startAt + buffer.duration;
+  scheduledPlayback.add(source);
+  source.onended = () => {
+    scheduledPlayback.delete(source);
+    try {
+      source.disconnect();
+    } catch {
+      // Already disconnected.
+    }
+  };
+  source.start(startAt);
+}
+
+function appendTranscript(current, next) {
+  if (!next) return current;
+  return current + next;
+}
+
+function handleServerMessage(message) {
+  if (message.error) {
+    throw new Error("Gemini Live API からエラー応答を受信しました。");
+  }
+
+  const content = message.serverContent;
+  if (!content) return;
+
+  if (content.interrupted) {
+    stopScheduledPlayback();
+    suppressPlayback = false;
+  }
+
+  if (content.inputTranscription?.text) {
+    committedInputTranscript = appendTranscript(committedInputTranscript, content.inputTranscription.text);
+    interimInputTranscript = "";
+    renderInputTranscript();
+  }
+
+  if (content.interimInputTranscription?.text) {
+    interimInputTranscript = content.interimInputTranscription.text;
+    renderInputTranscript();
+  }
+
+  if (content.outputTranscription?.text) {
+    outputTranscript = appendTranscript(outputTranscript, content.outputTranscription.text);
+    outputTranscriptElement.textContent = outputTranscript;
+  }
+
+  for (const part of content.modelTurn?.parts ?? []) {
+    if (part.inlineData?.data && (part.inlineData.mimeType ?? "audio/pcm").startsWith("audio/pcm")) {
+      playAudioChunk(part.inlineData.data);
+    }
+  }
+
+  if (content.turnComplete) suppressPlayback = false;
+}
+
+function releaseAudioResources({ closeSocket = true } = {}) {
+  const activeSocket = socket;
+  socket = null;
+  if (closeSocket && activeSocket && activeSocket.readyState < WebSocket.CLOSING) {
+    try {
+      activeSocket.close(1000, "User ended session");
+    } catch {
+      // Cleanup continues even if the socket is already closing.
+    }
+  }
+
+  if (captureNode) {
+    try {
+      captureNode.port.postMessage({ type: "stop" });
+      captureNode.port.close();
+      captureNode.disconnect();
+    } catch {
+      // The audio graph may already have stopped.
+    }
+    captureNode = null;
+  }
+
+  if (microphoneSource) {
+    try {
+      microphoneSource.disconnect();
+    } catch {
+      // The node may already be disconnected.
+    }
+    microphoneSource = null;
+  }
+
+  if (mutedCaptureGain) {
+    try {
+      mutedCaptureGain.disconnect();
+    } catch {
+      // The node may already be disconnected.
+    }
+    mutedCaptureGain = null;
+  }
+
+  if (microphoneStream) {
+    for (const track of microphoneStream.getTracks()) track.stop();
+    microphoneStream = null;
+  }
+
+  stopScheduledPlayback();
+  const context = audioContext;
+  audioContext = null;
+  if (context && context.state !== "closed") {
+    return context.close().catch(() => {});
+  }
+  return Promise.resolve();
+}
+
+async function stopSession() {
+  lifecycle += 1;
+  isStarting = false;
+  isConnected = false;
+  await releaseAudioResources();
+  suppressPlayback = false;
+  clearError();
+  setStatus("未接続", "idle");
+  updateControls();
+}
+
+async function failSession(message) {
+  lifecycle += 1;
+  isStarting = false;
+  isConnected = false;
+  await releaseAudioResources();
+  suppressPlayback = false;
+  showError(message);
+  setStatus("エラー", "error");
+  updateControls();
+}
+
+async function handleUnexpectedClose() {
+  if (!isStarting && !isConnected) return;
+  lifecycle += 1;
+  isStarting = false;
+  isConnected = false;
+  await releaseAudioResources({ closeSocket: false });
+  showError("Gemini Live との接続が切れました。「会話を開始」から再接続してください。");
+  setStatus("接続が切断されました", "error");
+  updateControls();
+}
+
+function connectWebSocket(token, model, websocketBaseUrl, runId) {
+  return new Promise((resolve, reject) => {
+    let setupFinished = false;
+    const wsUrl = new URL(websocketBaseUrl);
+    wsUrl.searchParams.set("access_token", token);
+    const activeSocket = new WebSocket(wsUrl.toString());
+    socket = activeSocket;
+
+    activeSocket.addEventListener("open", () => {
+      if (runId !== lifecycle) {
+        activeSocket.close();
+        return;
+      }
+      const setup = {
+        setup: {
+          model: `models/${model}`,
+          responseModalities: ["AUDIO"],
+          inputAudioTranscription: {},
+          outputAudioTranscription: {},
+          systemInstruction: { parts: [{ text: SYSTEM_INSTRUCTION }] },
+        },
+      };
+      activeSocket.send(JSON.stringify(setup));
+    });
+
+    activeSocket.addEventListener("message", (event) => {
+      try {
+        if (typeof event.data !== "string") throw new Error("Unexpected message type");
+        const message = JSON.parse(event.data);
+        if (message.setupComplete && !setupFinished) {
+          setupFinished = true;
+          resolve();
+        }
+        handleServerMessage(message);
+      } catch {
+        if (!setupFinished) {
+          reject(new Error("Gemini Live から正しい応答を受信できませんでした。"));
+        } else {
+          void failSession("Gemini Live から不正な応答を受信したため、接続を終了しました。");
+        }
+      }
+    });
+
+    activeSocket.addEventListener("error", () => {
+      if (!setupFinished) {
+        reject(new Error("Gemini Live に接続できませんでした。API の利用状況とネットワークを確認してください。"));
+      } else {
+        void failSession("Gemini Live との通信でエラーが発生しました。");
+      }
+    });
+
+    activeSocket.addEventListener("close", () => {
+      if (!setupFinished) {
+        reject(new Error("Gemini Live の接続がセットアップ完了前に終了しました。"));
+      }
+      if (socket === activeSocket) {
+        socket = null;
+        void handleUnexpectedClose();
+      }
+    });
+  });
+}
+
+async function startSession() {
+  if (isStarting || isConnected) return;
+  const runId = ++lifecycle;
+  isStarting = true;
+  clearError();
+  resetTranscripts();
+  setStatus("接続中…", "connecting");
+  updateControls();
+
+  try {
+    if (!navigator.mediaDevices?.getUserMedia || !window.AudioContext || !window.AudioWorkletNode) {
+      throw new Error("このブラウザーは必要な音声機能に対応していません。最新の Chrome または Edge でお試しください。");
+    }
+
+    audioContext = new AudioContext();
+    const microphoneRequest = navigator.mediaDevices.getUserMedia({
+      audio: {
+        channelCount: { ideal: 1 },
+        echoCancellation: true,
+        noiseSuppression: true,
+        autoGainControl: true,
+      },
+    });
+    await audioContext.resume();
+    const requestedStream = await microphoneRequest;
+    if (runId !== lifecycle) {
+      for (const track of requestedStream.getTracks()) track.stop();
+      return;
+    }
+    microphoneStream = requestedStream;
+
+    const tokenResponse = await fetch("/api/live-token", {
+      method: "POST",
+      credentials: "same-origin",
+      cache: "no-store",
+      headers: { Accept: "application/json" },
+    });
+    const tokenData = await tokenResponse.json().catch(() => ({}));
+    if (!tokenResponse.ok) {
+      throw new Error(tokenData.detail ?? "セッショントークンを取得できませんでした。");
+    }
+    if (typeof tokenData.token !== "string" || typeof tokenData.model !== "string" || typeof tokenData.websocket_url !== "string") {
+      throw new Error("サーバーから不正なセッション情報が返されました。");
+    }
+    if (runId !== lifecycle) return;
+
+    await connectWebSocket(tokenData.token, tokenData.model, tokenData.websocket_url, runId);
+    if (runId !== lifecycle) return;
+
+    await audioContext.audioWorklet.addModule("/static/pcm-worklet.js");
+    if (runId !== lifecycle) return;
+
+    microphoneSource = audioContext.createMediaStreamSource(microphoneStream);
+    captureNode = new AudioWorkletNode(audioContext, "pcm-capture-processor", {
+      numberOfInputs: 1,
+      numberOfOutputs: 1,
+      outputChannelCount: [1],
+      processorOptions: { chunkSamples: 320 },
+    });
+    mutedCaptureGain = audioContext.createGain();
+    mutedCaptureGain.gain.value = 0;
+    captureNode.port.onmessage = (event) => {
+      if (event.data?.type !== "audio" || !socket || socket.readyState !== WebSocket.OPEN) return;
+      if (socket.bufferedAmount > 512 * 1024) return;
+      const bytes = new Uint8Array(event.data.buffer);
+      socket.send(JSON.stringify({
+        realtimeInput: {
+          audio: {
+            data: bytesToBase64(bytes),
+            mimeType: INPUT_MIME_TYPE,
+          },
+        },
+      }));
+    };
+
+    microphoneSource.connect(captureNode);
+    captureNode.connect(mutedCaptureGain);
+    mutedCaptureGain.connect(audioContext.destination);
+    if (runId !== lifecycle) return;
+
+    isConnected = true;
+    isStarting = false;
+    setStatus("会話中", "connected");
+    updateControls();
+  } catch (error) {
+    if (runId !== lifecycle) return;
+    await releaseAudioResources();
+    if (runId !== lifecycle) return;
+    const message = error instanceof Error ? error.message : "予期しないエラーが発生しました。";
+    showError(message);
+    setStatus("エラー", "error");
+  } finally {
+    if (runId === lifecycle) {
+      isStarting = false;
+      updateControls();
+    }
+  }
+}
+
+function interruptPlayback() {
+  if (!isConnected || !audioContext) return;
+  stopScheduledPlayback();
+  suppressPlayback = true;
+}
+
+startButton.addEventListener("click", () => void startSession());
+interruptButton.addEventListener("click", interruptPlayback);
+stopButton.addEventListener("click", () => void stopSession());
+
+setStatus("未接続", "idle");
+updateControls();
