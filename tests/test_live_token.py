@@ -89,3 +89,10 @@ def test_rejects_cross_origin_token_request():
         headers={"origin": "http://evil.example"},
     )
     assert response.status_code == 403
+
+
+def test_rejects_malformed_host_with_userinfo():
+    response = client_for(token_client=FakeTokenClient()).get(
+        "/", headers={"host": "attacker@localhost"}
+    )
+    assert response.status_code == 400
