@@ -43,7 +43,7 @@ def test_missing_api_key_returns_service_unavailable_without_secret(caplog):
     assert "test-secret-key" not in caplog.text
 
 
-def test_success_returns_ephemeral_token_and_safe_metadata_only():
+def test_success_returns_ephemeral_token_and_safe_metadata_only(caplog):
     fake = FakeTokenClient(token=type("Token", (), {"name": "short-lived-token"})())
     response = client_for(token_client=fake).post(
         "/api/live-token",
@@ -56,6 +56,9 @@ def test_success_returns_ephemeral_token_and_safe_metadata_only():
         "model": MODEL_ID,
         "websocket_url": "wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContentConstrained",
     }
+    assert response.headers["cache-control"] == "no-store"
+    assert "short-lived-token" not in caplog.text
+    assert "test-secret-key" not in caplog.text
     assert fake.config["uses"] == 1
     assert fake.config["live_connect_constraints"]["model"] == MODEL_ID
     assert fake.config["live_connect_constraints"]["config"]["response_modalities"] == ["AUDIO"]
