@@ -10,7 +10,7 @@ test("floatToPcm16 clamps values and encodes little-endian signed PCM16", () => 
 test("pcm16ToFloat decodes little-endian signed PCM16", () => {
   assert.deepEqual(
     [...pcm16ToFloat(new Uint8Array([255, 127, 0, 128, 0, 0]))],
-    [1, -1, 0],
+    [32767 / 32768, -1, 0],
   );
 });
 
