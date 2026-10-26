@@ -409,8 +409,7 @@ async function startSession() {
     if (runId !== lifecycle) return;
     await releaseAudioResources();
     if (runId !== lifecycle) return;
-    const message = error instanceof Error ? error.message : "予期しないエラーが発生しました。";
-    showError(message);
+    showError(userFacingError(error));
     setStatus("エラー", "error");
   } finally {
     if (runId === lifecycle) {
