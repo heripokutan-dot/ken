@@ -27,9 +27,12 @@ FRONTEND_DIR = Path(__file__).resolve().parent / "frontend"
 
 def _is_loopback_host(host: str) -> bool:
     try:
-        hostname = urlsplit("//" + host).hostname
+        parsed = urlsplit("//" + host)
     except ValueError:
         return False
+    if parsed.netloc != host or parsed.username or parsed.password or parsed.path or parsed.query or parsed.fragment:
+        return False
+    hostname = parsed.hostname
     return hostname is not None and hostname.lower() in {"localhost", "127.0.0.1", "::1"}
 
 
