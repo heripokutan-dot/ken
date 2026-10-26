@@ -104,7 +104,15 @@ def main() -> int:
         print("::error::Gemini Live session timed out.", file=sys.stderr)
         return 1
     except Exception as exc:
-        print(f"::error::Gemini Live request failed ({type(exc).__name__}).", file=sys.stderr)
+        detail = str(exc).replace("\\n", " ").replace("\\r", " ")
+        if key := os.environ.get("GEMINI_API_KEY"):
+            detail = detail.replace(key, "[REDACTED]")
+        if not detail.strip():
+            detail = "No additional error details were returned."
+        print(
+            f"::error::Gemini Live request failed ({type(exc).__name__}): {detail[:500]}",
+            file=sys.stderr,
+        )
         return 1
     print(f"Live API audio saved to {OUTPUT_PATH}")
     print(f"Output transcription: {result}")
