@@ -104,7 +104,7 @@ def main() -> int:
         print("::error::Gemini Live session timed out.", file=sys.stderr)
         return 1
     except Exception as exc:
-        detail = str(exc).replace("\\n", " ").replace("\\r", " ")
+        detail = str(exc).replace("\n", " ").replace("\r", " ")
         if key := os.environ.get("GEMINI_API_KEY"):
             detail = detail.replace(key, "[REDACTED]")
         if not detail.strip():
