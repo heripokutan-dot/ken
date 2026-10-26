@@ -3,10 +3,12 @@ from __future__ import annotations
 import datetime as dt
 import logging
 import os
+from pathlib import Path
 from urllib.parse import urlsplit
 
 from fastapi import FastAPI, HTTPException, Request
-from fastapi.responses import JSONResponse
+from fastapi.responses import FileResponse, JSONResponse
+from fastapi.staticfiles import StaticFiles
 
 MODEL_ID = "gemini-3.8-live"
 WEBSOCKET_URL = (
@@ -20,6 +22,7 @@ SYSTEM_INSTRUCTION = (
 )
 
 logger = logging.getLogger(__name__)
+FRONTEND_DIR = Path(__file__).resolve().parent / "frontend"
 
 
 def _is_loopback_host(host: str) -> bool:
@@ -46,6 +49,18 @@ def create_app(*, api_key: str | None = None, token_client: object | None = None
     configured_api_key = api_key if api_key is not None else os.getenv("GEMINI_API_KEY")
     app = FastAPI(title="Gemini Live Browser Voice App")
     app.state.token_client = token_client
+
+    @app.middleware("http")
+    async def restrict_to_loopback(request: Request, call_next):
+        if not _is_loopback_host(request.headers.get("host", "")):
+            return JSONResponse({"detail": "Local requests only."}, status_code=400)
+        return await call_next(request)
+
+    @app.get("/")
+    async def serve_index() -> FileResponse:
+        return FileResponse(FRONTEND_DIR / "index.html", headers={"Cache-Control": "no-store"})
+
+    app.mount("/static", StaticFiles(directory=FRONTEND_DIR), name="static")
 
     @app.post("/api/live-token")
     async def create_live_token(request: Request) -> JSONResponse:
