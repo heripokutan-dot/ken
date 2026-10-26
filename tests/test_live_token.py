@@ -100,3 +100,10 @@ def test_rejects_malformed_host_with_userinfo():
         "/", headers={"host": "attacker@localhost"}
     )
     assert response.status_code == 400
+
+
+def test_rejects_origin_with_different_scheme():
+    response = client_for(token_client=FakeTokenClient()).post(
+        "/api/live-token", headers={"origin": "https://localhost"}
+    )
+    assert response.status_code == 403
