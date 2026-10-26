@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#101827">
+  <title>KEN | Web表示テスト</title>
+  <style>
+    :root { color-scheme: dark; font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; }
+    * { box-sizing: border-box; }
+    body { margin: 0; min-height: 100vh; display: grid; place-items: center; padding: 24px; color: #f8fafc; background: radial-gradient(ellipse at 20% 10%, #253c67 0, transparent 42%), #101827; }
+    main { width: min(680px, 100%); padding: clamp(28px, 7vw, 56px); border: 1px solid #ffffff24; border-radius: 28px; background: #ffffff0a; box-shadow: 0 24px 80px #0005; }
+    .tag { display: inline-flex; align-items: center; gap: 8px; color: #a7f3d0; font-size: 13px; letter-spacing: .12em; text-transform: uppercase; }
+    .dot { width: 9px; height: 9px; border-radius: 50%; background: #34d399; box-shadow: 0 0 16px #34d399; }
+    h1 { margin: 24px 0 12px; font-size: clamp(42px, 9vw, 72px); line-height: 1; letter-spacing: -.06em; }
+    p { color: #cbd5e1; font-size: 17px; line-height: 1.8; }
+    .panel { margin-top: 30px; padding: 18px 20px; border-radius: 16px; background: #0b1220a8; }
+    .label { color: #94a3b8; font-size: 12px; letter-spacing: .1em; }
+    #time { margin-top: 7px; font-size: 20px; font-variant-numeric: tabular-nums; }
+    button { margin-top: 22px; padding: 12px 18px; border: 0; border-radius: 12px; color: #082f49; background: #a7f3d0; font: inherit; font-weight: 700; cursor: pointer; }
+    button:hover { background: #d1fae5; }
+    #message { min-height: 1.5em; margin: 12px 0 0; color: #a7f3d0; font-size: 14px; }
+    footer { margin-top: 32px; color: #64748b; font-size: 12px; }
+  </style>
+</head>
+<body>
+  <main>
+    <div class="tag"><span class="dot"></span> Web page is running</div>
+    <h1>KEN<span style="color:#a7f3d0">.</span></h1>
+    <p>ページが表示されました。<br>これは GitHub リポジトリから公開するための、シンプルな動作確認ページです。</p>
+    <section class="panel" aria-live="polite">
+      <div class="label">CURRENT TIME</div>
+      <div id="time">時刻を読み込み中…</div>
+    </section>
+    <button id="test">動作テスト</button>
+    <p id="message" aria-live="polite"></p>
+    <footer>KEN · Static HTML · Web display test</footer>
+  </main>
+  <script>
+    const time = document.querySelector("#time");
+    const updateTime = () => time.textContent = new Date().toLocaleString("ja-JP", { dateStyle: "full", timeStyle: "medium" });
+    updateTime();
+    setInterval(updateTime, 1000);
+    document.querySelector("#test").addEventListener("click", () => {
+      document.querySelector("#message").textContent = "成功！JavaScript も正常に動作しています。";
+    });
+  </script>
+</body>
+</html>
