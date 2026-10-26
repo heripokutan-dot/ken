@@ -27,7 +27,7 @@ class FakeTokenClient:
 
 
 def client_for(api_key="test-secret-key", token_client=None):
-    return TestClient(create_app(api_key=api_key, token_client=token_client))
+    return TestClient(create_app(api_key=api_key, token_client=token_client), base_url="http://localhost")
 
 
 def test_missing_api_key_returns_service_unavailable_without_secret(caplog):
@@ -35,7 +35,7 @@ def test_missing_api_key_returns_service_unavailable_without_secret(caplog):
     with caplog.at_level(logging.ERROR):
         response = app_client.post(
             "/api/live-token",
-            headers={"origin": "http://testserver"},
+            headers={"origin": "http://localhost"},
         )
 
     assert response.status_code == 503
