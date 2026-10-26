@@ -44,7 +44,7 @@ class WriteWavTests(unittest.TestCase):
                 self.assertEqual(wav.getnchannels(), 1)
                 self.assertEqual(wav.getsampwidth(), 2)
                 self.assertEqual(wav.getframerate(), 24000)
-                self.assertEqual(wav.getnframes(), 12)
+                self.assertEqual(wav.getnframes(), 24)
                 self.assertEqual(wav.readframes(wav.getnframes()), pcm)
 
     def test_rejects_empty_audio(self):
