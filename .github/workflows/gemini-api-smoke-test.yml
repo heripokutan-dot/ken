@@ -1,0 +1,60 @@
+name: Gemini API smoke test
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  gemini-smoke-test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - name: Check that the API key is configured
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+        run: |
+          if [ -z "$GEMINI_API_KEY" ]; then
+            echo "::error::Missing GEMINI_API_KEY. Add it in Settings > Secrets and variables > Actions."
+            exit 1
+          fi
+
+      - name: Call Gemini API
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+        shell: bash
+        run: |
+          payload='{
+            "contents": [{
+              "parts": [{
+                "text": "日本語で「Gemini APIの接続テストに成功しました」と一文だけ返してください。"
+              }]
+            }],
+            "generationConfig": {
+              "maxOutputTokens": 128,
+              "temperature": 0.2
+            }
+          }'
+
+          status=$(curl --silent --show-error \
+            --output response.json \
+            --write-out "%{http_code}" \
+            --request POST \
+            "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash-lite:generateContent" \
+            --header "Content-Type: application/json" \
+            --header "x-goog-api-key: ${GEMINI_API_KEY}" \
+            --data "$payload")
+
+          if [ "$status" -lt 200 ] || [ "$status" -ge 300 ]; then
+            echo "::error::Gemini API returned HTTP $status."
+            jq -r '.error.message // "No error details returned."' response.json
+            exit 1
+          fi
+
+          jq -r '[.candidates[0].content.parts[]?.text // empty] | join("\n")' response.json | tee gemini-response.txt
+
+          if [ ! -s gemini-response.txt ]; then
+            echo "::error::The API returned no text output."
+            exit 1
+          fi
