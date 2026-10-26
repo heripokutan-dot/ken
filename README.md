@@ -4,6 +4,15 @@
 
 Python のローカルサーバーとブラウザーを使い、日本語で Gemini Live と音声会話する試作アプリです。会話や音声はこのアプリ内に保存しません。
 
+### ホスト版（Cloudflare Pages・iPhone Safari 向け）
+
+`frontend/` を Cloudflare Pages で配信し、`functions/api/live-token.ts` がトークンを発行する構成です。PC を起動しておく必要はありません。利用は Cloudflare Access（メールのワンタイム PIN）で許可された本人のみです。
+
+- 配置・Secret・Access・レート制限の手順は [セットアップガイド](docs/superpowers/plans/2026-10-27-gemini-live-iphone-cloudflare-setup.md) を参照してください。
+- 設定が揃うまでトークン API は安全側に倒れ（503）、トークンを発行しません。
+- 本番デプロイ・Secret 登録・GitHub Actions の実行は、利用者の明示的な許可があるまで行いません。
+- 以下の「ローカル試作」の手順は、この Pages 版とは別の経路です。
+
 ### 必要なもの
 
 - Python 3.12 以降
@@ -51,6 +60,7 @@ python -m uvicorn server:app --host 127.0.0.1 --port 8000
 python -m pytest -q
 node --test tests/test_pcm_utils.mjs
 node --test tests/test_error_messages.mjs
+npm test   # Pages Functions（Node 22 以降）と frontend の Node テストをまとめて実行
 ```
 
 ### セキュリティと制限
