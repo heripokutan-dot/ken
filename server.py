@@ -41,7 +41,7 @@ def _origin_matches_host(origin: str, host: str) -> bool:
         parsed = urlsplit(origin)
     except ValueError:
         return False
-    if parsed.scheme not in {"http", "https"} or not parsed.netloc:
+    if parsed.scheme != "http" or not parsed.netloc:
         return False
     if parsed.username or parsed.password or parsed.path or parsed.query or parsed.fragment:
         return False
