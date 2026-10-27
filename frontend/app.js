@@ -362,7 +362,9 @@ async function startSession() {
         idToken = null;
         updateControls();
       }
-      throw new Error(tokenErrorMessage(tokenResponse.status));
+      const errorBody = await tokenResponse.json().catch(() => null);
+      const errorCode = typeof errorBody?.error === "string" ? errorBody.error : undefined;
+      throw new Error(tokenErrorMessage(tokenResponse.status, errorCode));
     }
     const tokenData = await tokenResponse.json().catch(() => {
       throw new Error(tokenErrorMessage(401));

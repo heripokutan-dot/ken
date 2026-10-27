@@ -46,6 +46,16 @@ test("token endpoint 503 and 502 give recovery guidance", () => {
   assert.match(tokenErrorMessage(502), /トークン/);
 });
 
+test("token endpoint 503 names the missing setting only for known error codes", () => {
+  assert.match(tokenErrorMessage(503, "service_misconfigured"), /ALLOWED_EMAIL/);
+  assert.match(tokenErrorMessage(503, "rate_limit_unavailable"), /RATE_LIMIT_DB/);
+  assert.match(tokenErrorMessage(503, "gemini_not_configured"), /GEMINI_API_KEY/);
+  const unknown = tokenErrorMessage(503, "<script>secret</script>");
+  assert.equal(unknown, tokenErrorMessage(503));
+  assert.doesNotMatch(unknown, /script|secret/);
+  assert.equal(tokenErrorMessage(503, "__proto__"), tokenErrorMessage(503));
+});
+
 test("unknown token endpoint statuses fall back to a retry message", () => {
   assert.match(tokenErrorMessage(500), /再試行/);
 });

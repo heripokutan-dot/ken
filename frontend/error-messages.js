@@ -18,9 +18,18 @@ export function userFacingError(error) {
   return /[ぁ-んァ-ヶ一-龯]/u.test(message) ? message : DEFAULT_MESSAGE;
 }
 
+// Safe, value-free detail for the 503 error codes the token endpoint returns (names of settings only).
+const SERVER_SETUP_HINTS = {
+  service_misconfigured:
+    "ログイン設定（ALLOWED_EMAIL・AUTH_PROVIDER・GOOGLE_CLIENT_ID）のいずれかが、この環境に届いていません。",
+  rate_limit_unavailable: "レート制限用のデータベース（RATE_LIMIT_DB）に接続できません。",
+  gemini_not_configured: "Gemini の API キー（GEMINI_API_KEY）が、この環境に届いていません。",
+};
+
 // Maps a non-OK response from POST /api/live-token to a safe Japanese message.
-// The response body is intentionally not used, so provider or account details are never shown.
-export function tokenErrorMessage(status) {
+// Only the status and an allowlisted error code are used; the response body text is never shown,
+// so provider or account details cannot leak.
+export function tokenErrorMessage(status, code) {
   if (status === 401) {
     return "ログインの確認が必要です。ページを再読み込みして、もう一度サインインしてください。";
   }
@@ -31,7 +40,9 @@ export function tokenErrorMessage(status) {
     return "短時間に接続しすぎています。しばらく待ってから、もう一度お試しください。";
   }
   if (status === 503) {
-    return "サーバーの設定が完了していません。管理者に設定状況を確認してください。";
+    const base = "サーバーの設定が完了していません。管理者に設定状況を確認してください。";
+    const hint = typeof code === "string" && Object.hasOwn(SERVER_SETUP_HINTS, code) ? SERVER_SETUP_HINTS[code] : "";
+    return hint ? `${base}${hint}` : base;
   }
   if (status === 502) {
     return "Gemini Live のトークンを作成できませんでした。しばらくしてから、もう一度お試しください。";
