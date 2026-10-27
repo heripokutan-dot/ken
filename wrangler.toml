@@ -1,16 +1,20 @@
 # Cloudflare Pages build settings for the hosted iPhone app.
-# This file holds NO account IDs, database IDs, secrets, hostnames, or personal data.
+# Do not put API keys, OAuth secrets, account IDs, or personal data in this file.
 #
-# Bindings and Secrets are configured in the Cloudflare Pages dashboard, NOT in this file:
-#   Secrets (encrypted):  GEMINI_API_KEY, AUTH_PROVIDER ("google"), GOOGLE_CLIENT_ID, ALLOWED_EMAIL
-#   D1 database binding:  RATE_LIMIT_DB -> the D1 database created from migrations/0001_rate_limits.sql
+# Encrypted application Secrets are configured in the Cloudflare Pages dashboard:
+#   GEMINI_API_KEY, AUTH_PROVIDER ("google"), GOOGLE_CLIENT_ID, ALLOWED_EMAIL
 #
-# Why: Pages fields defined in a Wrangler file cannot be edited in the dashboard afterwards, so bindings
-# are kept in one place (the dashboard). Do not add [[d1_databases]] here unless you move the binding
-# out of the dashboard on purpose; see docs/superpowers/plans/2026-10-27-gemini-live-iphone-cloudflare-setup.md.
+# The D1 database binding is managed here because this Pages project uses wrangler.toml
+# for bindings. Keep the database ID aligned with the D1 database created for this project.
+# See docs/superpowers/plans/2026-10-27-gemini-live-iphone-cloudflare-setup.md.
 #
 # The token endpoint fails closed (503) until RATE_LIMIT_DB and the sign-in settings are present.
 # Rate limiting uses D1 because the Rate Limiting binding is not a supported Pages Functions binding.
 name = "ken-live"
 pages_build_output_dir = "frontend"
 compatibility_date = "2026-10-01"
+
+[[d1_databases]]
+binding = "RATE_LIMIT_DB"
+database_name = "ken-rate-limits"
+database_id = "dff10737-8ee4-4c74-a191-67535cfbfb72"
