@@ -257,3 +257,22 @@ test("auth_config_rejects_non_get", () => {
   });
   assert.equal(res.status, 405);
 });
+
+test("auth_config_404_body_names_missing_settings_without_values", async () => {
+  const res = handleAuthConfig(new Request(`${ORIGIN}/api/auth-config`, { method: "GET" }), {
+    AUTH_PROVIDER: "google",
+    GOOGLE_CLIENT_ID: undefined,
+  });
+  assert.equal(res.status, 404);
+  const body = await res.text();
+  assert.deepEqual(JSON.parse(body), { error: "not_configured", missing: ["GOOGLE_CLIENT_ID"] });
+  assert.equal(body.includes(ALLOWED), false);
+});
+
+test("auth_config_404_lists_auth_provider_when_unset", async () => {
+  const res = handleAuthConfig(new Request(`${ORIGIN}/api/auth-config`, { method: "GET" }), {
+    GOOGLE_CLIENT_ID,
+  });
+  assert.equal(res.status, 404);
+  assert.deepEqual(JSON.parse(await res.text()), { error: "not_configured", missing: ["AUTH_PROVIDER"] });
+});
