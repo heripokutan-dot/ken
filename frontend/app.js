@@ -31,6 +31,10 @@ let suppressPlayback = false;
 let committedInputTranscript = "";
 let interimInputTranscript = "";
 let outputTranscript = "";
+// Hosted (Google sign-in) mode: the ID token lives only in memory, never in storage.
+let authRequired = false;
+let authClientId = null;
+let idToken = null;
 
 function setStatus(message, state) {
   statusText.textContent = message;
@@ -48,7 +52,7 @@ function clearError() {
 }
 
 function updateControls() {
-  startButton.disabled = isStarting || isConnected;
+  startButton.disabled = isStarting || isConnected || (authRequired && !idToken);
   interruptButton.disabled = !isConnected;
   stopButton.disabled = !(isStarting || isConnected || socket || microphoneStream || audioContext);
 }
@@ -343,14 +347,20 @@ async function startSession() {
     await audioContext.resume();
     if (runId !== lifecycle) return;
 
+    const headers = { Accept: "application/json", "Content-Type": "application/json" };
+    if (authRequired) headers.Authorization = `Bearer ${idToken}`;
     const tokenResponse = await fetch("/api/live-token", {
       method: "POST",
       credentials: "same-origin",
       cache: "no-store",
-      headers: { Accept: "application/json", "Content-Type": "application/json" },
+      headers,
       body: "{}",
     });
     if (!tokenResponse.ok) {
+      if (authRequired && tokenResponse.status === 401) {
+        idToken = null;
+        updateControls();
+      }
       throw new Error(tokenErrorMessage(tokenResponse.status));
     }
     const tokenData = await tokenResponse.json().catch(() => {
@@ -419,9 +429,51 @@ function interruptPlayback() {
   suppressPlayback = true;
 }
 
+function onGoogleCredential(response) {
+  if (!response || typeof response.credential !== "string" || !response.credential) return;
+  idToken = response.credential;
+  clearError();
+  setStatus("サインイン済み", "idle");
+  updateControls();
+}
+
+async function initSignIn() {
+  let config;
+  try {
+    const res = await fetch("/api/auth-config", { cache: "no-store", credentials: "same-origin" });
+    if (!res.ok) return; // local prototype or Access-protected deployment: no in-page sign-in
+    config = await res.json();
+  } catch {
+    return;
+  }
+  if (config?.provider !== "google" || typeof config.clientId !== "string" || !config.clientId) return;
+
+  authRequired = true;
+  authClientId = config.clientId;
+  updateControls();
+
+  const container = document.querySelector("#google-signin");
+  const attachButton = () => {
+    if (!window.google?.accounts?.id) {
+      showError("Google サインインを読み込めませんでした。ページを再読み込みしてください。");
+      return;
+    }
+    window.google.accounts.id.initialize({
+      client_id: authClientId,
+      callback: onGoogleCredential,
+      auto_select: false,
+      cancel_on_tap_outside: true,
+    });
+    window.google.accounts.id.renderButton(container, { theme: "outline", size: "large", text: "signin_with", locale: "ja" });
+  };
+  if (window.google?.accounts?.id) attachButton();
+  else window.addEventListener("load", attachButton, { once: true });
+}
+
 startButton.addEventListener("click", () => void startSession());
 interruptButton.addEventListener("click", interruptPlayback);
 stopButton.addEventListener("click", () => void stopSession());
 
 setStatus("未接続", "idle");
 updateControls();
+void initSignIn();

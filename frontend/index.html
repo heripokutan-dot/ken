@@ -7,6 +7,7 @@
     <title>Gemini Live 音声会話</title>
     <link rel="stylesheet" href="/static/styles.css">
     <script type="module" src="/static/app.js"></script>
+    <script src="https://accounts.google.com/gsi/client" async defer></script>
   </head>
   <body>
     <main class="app-shell">
@@ -15,6 +16,12 @@
         <h1>Gemini Live 音声会話</h1>
         <p class="intro">マイクに向かって話しかけると、Gemini が音声で返答します。音声や会話履歴はこのアプリには保存されません。</p>
       </header>
+
+      <section class="signin-panel" aria-labelledby="signin-heading">
+        <h2 id="signin-heading" class="section-label">サインイン</h2>
+        <p class="intro">許可されたアカウントでサインインすると、会話を開始できます（サインインには Google を使用します）。</p>
+        <div id="google-signin" class="google-signin"></div>
+      </section>
 
       <section class="session-panel" aria-labelledby="session-heading">
         <div class="status-row">

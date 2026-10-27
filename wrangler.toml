@@ -1,8 +1,12 @@
-# Cloudflare Pages configuration for the hosted iPhone app. No account IDs, secrets, or hostnames here.
-# Set in the Pages dashboard (never in this file):
-#   Secret:    GEMINI_API_KEY
-#   Variables: ACCESS_TEAM_DOMAIN, ACCESS_AUDIENCE, ALLOWED_EMAIL
-#   Binding:   RATE_LIMITER (rate-limiting binding; see the setup guide — the endpoint fails closed without it)
+# Cloudflare Pages configuration for the hosted iPhone app.
+# This file holds NO account IDs, secrets, hostnames, or personal data.
+#
+# Configure in the Pages dashboard (Settings > Environment variables / Bindings):
+#   Secrets (encrypted):  GEMINI_API_KEY, AUTH_PROVIDER ("google"), GOOGLE_CLIENT_ID, ALLOWED_EMAIL
+#   D1 binding:           RATE_LIMIT_DB -> a D1 database created from migrations/0001_rate_limits.sql
+#
+# Rate limiting uses D1 because the Rate Limiting binding is not a supported Pages Functions binding.
+# The token endpoint fails closed (503) until RATE_LIMIT_DB and the sign-in settings are present.
 name = "ken-live"
 pages_build_output_dir = "frontend"
 compatibility_date = "2026-10-01"

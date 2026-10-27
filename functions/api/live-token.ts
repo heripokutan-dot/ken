@@ -1,21 +1,60 @@
 // POST /api/live-token — Cloudflare Pages Function.
-// Order: same-origin request checks -> Access JWT -> allowlisted email -> rate limit -> Gemini token.
+// Order: same-origin request checks -> sign-in verification (google | access) -> allowlisted email
+//        -> rate limit (D1) -> Gemini ephemeral token.
 // Nothing (key, token, provider error text) is logged or echoed back on failure.
 
 import { validateTokenRequest, errorResponse, SECURITY_HEADERS } from "../_shared/http-security.ts";
 import { verifyAccessJwt } from "../_shared/access-auth.ts";
+import { verifyGoogleIdToken } from "../_shared/google-auth.ts";
 import { createGeminiEphemeralToken, GeminiTokenError } from "../_shared/gemini-token.ts";
-import { checkRateLimit, type RateLimiterBinding } from "../_shared/rate-limit.ts";
+import { checkRateLimit, type D1Like } from "../_shared/rate-limit.ts";
 
 export interface LiveTokenEnv {
-  GEMINI_API_KEY?: string;
+  AUTH_PROVIDER?: string; // "google" (default recommended) or "access"
+  ALLOWED_EMAIL?: string;
+  GOOGLE_CLIENT_ID?: string;
   ACCESS_TEAM_DOMAIN?: string;
   ACCESS_AUDIENCE?: string;
-  ALLOWED_EMAIL?: string;
-  RATE_LIMITER?: RateLimiterBinding;
+  GEMINI_API_KEY?: string;
+  RATE_LIMIT_DB?: D1Like;
 }
 
-const ACCESS_HEADER = "Cf-Access-Jwt-Assertion";
+export const TOKEN_RATE_LIMIT = { limit: 10, windowSeconds: 60 };
+
+async function authenticate(
+  request: Request,
+  env: LiveTokenEnv,
+  fetcher: typeof fetch,
+  allowedEmail: string,
+): Promise<{ email: string } | Response> {
+  const provider = env.AUTH_PROVIDER;
+  try {
+    if (provider === "google") {
+      const bearer = request.headers.get("Authorization") ?? "";
+      const match = /^Bearer ([A-Za-z0-9_.-]+)$/.exec(bearer);
+      if (!match) return errorResponse(401, "unauthenticated");
+      const user = await verifyGoogleIdToken(
+        match[1],
+        { clientId: env.GOOGLE_CLIENT_ID ?? "", allowedEmail },
+        fetcher,
+      );
+      return { email: user.email };
+    }
+    if (provider === "access") {
+      const jwt = request.headers.get("Cf-Access-Jwt-Assertion");
+      if (!jwt) return errorResponse(401, "unauthenticated");
+      const user = await verifyAccessJwt(
+        jwt,
+        { teamDomain: env.ACCESS_TEAM_DOMAIN ?? "", audience: env.ACCESS_AUDIENCE ?? "" },
+        fetcher,
+      );
+      return { email: user.email };
+    }
+  } catch {
+    return errorResponse(401, "unauthenticated");
+  }
+  return errorResponse(503, "service_misconfigured");
+}
 
 export async function handleLiveToken(
   request: Request,
@@ -27,29 +66,26 @@ export async function handleLiveToken(
   if (rejected) return rejected;
 
   // Fail closed on incomplete configuration; never fall back to an open endpoint.
-  if (!env.ACCESS_TEAM_DOMAIN || !env.ACCESS_AUDIENCE || !env.ALLOWED_EMAIL) {
+  if (!env.ALLOWED_EMAIL) return errorResponse(503, "service_misconfigured");
+  if (env.AUTH_PROVIDER === "google" && !env.GOOGLE_CLIENT_ID) return errorResponse(503, "service_misconfigured");
+  if (env.AUTH_PROVIDER === "access" && (!env.ACCESS_TEAM_DOMAIN || !env.ACCESS_AUDIENCE)) {
+    return errorResponse(503, "service_misconfigured");
+  }
+  if (env.AUTH_PROVIDER !== "google" && env.AUTH_PROVIDER !== "access") {
     return errorResponse(503, "service_misconfigured");
   }
 
-  const jwt = request.headers.get(ACCESS_HEADER);
-  if (!jwt) return errorResponse(401, "unauthenticated");
+  const auth = await authenticate(request, env, fetcher, env.ALLOWED_EMAIL);
+  if (auth instanceof Response) return auth;
 
-  let email: string;
-  try {
-    ({ email } = await verifyAccessJwt(
-      jwt,
-      { teamDomain: env.ACCESS_TEAM_DOMAIN, audience: env.ACCESS_AUDIENCE },
-      fetcher,
-    ));
-  } catch {
-    return errorResponse(401, "unauthenticated");
-  }
-
-  if (email.trim().toLowerCase() !== env.ALLOWED_EMAIL.trim().toLowerCase()) {
+  if (auth.email.trim().toLowerCase() !== env.ALLOWED_EMAIL.trim().toLowerCase()) {
     return errorResponse(403, "forbidden");
   }
 
-  const limit = await checkRateLimit(env.RATE_LIMITER, email.toLowerCase());
+  const limit = await checkRateLimit(env.RATE_LIMIT_DB, auth.email.trim().toLowerCase(), {
+    ...TOKEN_RATE_LIMIT,
+    nowSeconds: Math.floor(Date.now() / 1000),
+  });
   if (limit === "limited") return errorResponse(429, "rate_limited", { "Retry-After": "60" });
   if (limit === "unavailable") return errorResponse(503, "rate_limit_unavailable");
 
