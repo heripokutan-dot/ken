@@ -4,8 +4,12 @@
   "description": "Gemini Live voice app (local prototype and Cloudflare Pages app)",
   "type": "module",
   "scripts": {
+    "typecheck": "tsc -p tsconfig.json",
     "test:functions": "node --test --experimental-strip-types \"functions/**/*.test.ts\"",
     "test:frontend": "node --test tests/test_error_messages.mjs tests/test_pcm_utils.mjs",
-    "test": "npm run test:functions && npm run test:frontend"
+    "test": "npm run typecheck && npm run test:functions && npm run test:frontend"
+  },
+  "devDependencies": {
+    "typescript": "^6.0.3"
   }
 }

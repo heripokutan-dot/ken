@@ -12,9 +12,11 @@ This guide describes how the hosted app is configured. It deliberately avoids Cl
 | `AUTH_PROVIDER` = `google` | Pages **Secret** | 503 `service_misconfigured` |
 | `GOOGLE_CLIENT_ID` | Pages **Secret** | 503 `service_misconfigured` |
 | `ALLOWED_EMAIL` | Pages **Secret** | 503 `service_misconfigured` |
-| `RATE_LIMIT_DB` | Pages **D1 binding** | 503 `rate_limit_unavailable` |
+| `RATE_LIMIT_DB` | Pages **D1 database binding** (dashboard) | 503 `rate_limit_unavailable` |
 
 Secrets are used for the email and client ID so that personal data does not enter the repository. The Google client ID is public, but keeping it out of Git is simpler.
+
+**Single source of truth:** all Secrets and bindings are set in the Pages dashboard. `wrangler.toml` holds only build settings. Do not define the same bindings in both places: Pages does not let you edit fields that are defined in the Wrangler file.
 
 ## 1. Create the Pages project
 
@@ -43,17 +45,26 @@ Verification on the server: the function checks the ID token signature against G
 
 ## 4. Rate limiting with D1
 
-1. Create a D1 database (Workers & Pages → D1) and apply the schema:
+1. Create a D1 database in the Cloudflare dashboard (Storage & Databases → D1), or with the CLI:
    ```bash
-   wrangler d1 execute <database-name> --remote --file migrations/0001_rate_limits.sql
+   npx wrangler d1 create <your-database-name>
    ```
-   The `wrangler` command runs on your machine with your own login; it is not run by the implementation.
-2. In the Pages project, add a **D1 database binding** named `RATE_LIMIT_DB` pointing at that database.
-3. The limit is 10 token requests per 60 seconds per account (see `TOKEN_RATE_LIMIT` in `functions/api/live-token.ts`).
+   Note the database name you chose.
+2. Apply the schema from this repository (run on your own machine with your own login; the implementation does not run it):
+   ```bash
+   npx wrangler d1 execute <your-database-name> --remote --file migrations/0001_rate_limits.sql
+   ```
+   The `<DATABASE>` argument accepts the database name or its binding (per the Wrangler D1 command reference).
+3. In the Pages project settings (Functions → D1 database bindings; the dashboard labels may change, so check the current screen), add a binding:
+   - Variable name: `RATE_LIMIT_DB` (must match exactly; the code reads `env.RATE_LIMIT_DB`)
+   - Database: the database from step 1 (chosen in the dashboard; no ID is written into the repository)
+4. The limit is 10 token requests per 60 seconds per account (see `TOKEN_RATE_LIMIT` in `functions/api/live-token.ts`).
 
-> **Unverified:** whether creating a D1 database on your account requires payment details. Check first; if it does, stop and report it rather than adding payment details.
+**Alternative (not recommended unless you accept the trade-off):** declare the binding in `wrangler.toml` with `[[d1_databases]]`, `binding = "RATE_LIMIT_DB"`, and your own `database_id` entered locally. That locks these fields in the dashboard and puts an account-specific ID into the repository, which this project avoids.
+
+> **Unverified:** whether creating a D1 database on your account requires payment details, and whether it is included in the free plan for your account. Check the dashboard before creating anything; if payment details are requested, stop and report it rather than adding them.
 >
-> The Rate Limiting binding is intentionally not used: it is not in the list of supported Pages Functions bindings.
+> The Rate Limiting binding is intentionally not used: it is not in the list of supported Pages Functions bindings (Cloudflare docs, Pages Functions bindings page).
 
 ## 5. Deploy (requires explicit authorization)
 
