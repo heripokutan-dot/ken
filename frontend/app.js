@@ -374,7 +374,7 @@ async function startSession() {
     await connectWebSocket(tokenData.token, tokenData.model, tokenData.websocket_url, runId);
     if (runId !== lifecycle) return;
 
-    await audioContext.audioWorklet.addModule("/static/pcm-worklet.js");
+    await audioContext.audioWorklet.addModule("/pcm-worklet.js");
     if (runId !== lifecycle) return;
 
     microphoneSource = audioContext.createMediaStreamSource(microphoneStream);
