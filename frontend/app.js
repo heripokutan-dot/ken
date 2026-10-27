@@ -466,8 +466,22 @@ async function initSignIn() {
     });
     window.google.accounts.id.renderButton(container, { theme: "outline", size: "large", text: "signin_with", locale: "ja" });
   };
-  if (window.google?.accounts?.id) attachButton();
-  else window.addEventListener("load", attachButton, { once: true });
+
+  // The module may finish its config fetch after the window load event has fired.
+  // Waiting for the script itself avoids registering a load listener too late.
+  if (window.google?.accounts?.id) {
+    attachButton();
+  } else {
+    const googleScript = document.querySelector('script[src*="accounts.google.com/gsi/client"]');
+    if (!googleScript) {
+      showError("Google サインインのスクリプトが見つかりません。");
+      return;
+    }
+    googleScript.addEventListener("load", attachButton, { once: true });
+    googleScript.addEventListener("error", () => {
+      showError("Google サインインを読み込めませんでした。通信設定を確認してください。");
+    }, { once: true });
+  }
 }
 
 startButton.addEventListener("click", () => void startSession());
