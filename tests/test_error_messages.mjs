@@ -56,6 +56,14 @@ test("token endpoint 503 names the missing setting only for known error codes", 
   assert.equal(tokenErrorMessage(503, "__proto__"), tokenErrorMessage(503));
 });
 
+test("token endpoint 502 shows only the reason code and numeric upstream status", () => {
+  assert.match(tokenErrorMessage(502, "token_issue_failed", { reason: "token_upstream_rejected", upstream_status: 403 }), /HTTP 403/);
+  assert.match(tokenErrorMessage(502, "token_issue_failed", { reason: "token_upstream_unreachable" }), /接続できません/);
+  const hostile = tokenErrorMessage(502, "token_issue_failed", { reason: "<b>key</b>", upstream_status: "403 <script>" });
+  assert.equal(hostile, tokenErrorMessage(502));
+  assert.doesNotMatch(tokenErrorMessage(502, "x", { reason: "token_upstream_rejected", upstream_status: "abc" }), /abc/);
+});
+
 test("unknown token endpoint statuses fall back to a retry message", () => {
   assert.match(tokenErrorMessage(500), /再試行/);
 });

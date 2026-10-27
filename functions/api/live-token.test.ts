@@ -215,6 +215,8 @@ test("returns_502_with_sanitized_body_on_google_failure", async () => {
   assert.equal(res.status, 502);
   assert.equal(body.includes(SECRET), false);
   assert.equal(body.includes("bad key"), false);
+  // Only a fixed reason code and the upstream HTTP status number are exposed for troubleshooting.
+  assert.deepEqual(JSON.parse(body), { error: "token_issue_failed", reason: "token_upstream_rejected", upstream_status: 403 });
 });
 
 test("returns_token_without_caching", async () => {

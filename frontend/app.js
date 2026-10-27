@@ -364,7 +364,7 @@ async function startSession() {
       }
       const errorBody = await tokenResponse.json().catch(() => null);
       const errorCode = typeof errorBody?.error === "string" ? errorBody.error : undefined;
-      throw new Error(tokenErrorMessage(tokenResponse.status, errorCode));
+      throw new Error(tokenErrorMessage(tokenResponse.status, errorCode, errorBody));
     }
     const tokenData = await tokenResponse.json().catch(() => {
       throw new Error(tokenErrorMessage(401));

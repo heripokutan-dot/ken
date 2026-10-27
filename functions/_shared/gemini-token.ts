@@ -12,10 +12,13 @@ const SYSTEM_INSTRUCTION =
 
 export class GeminiTokenError extends Error {
   readonly status: number;
-  constructor(status: number, safeMessage: string) {
+  // HTTP status Google answered with (a bare number, never any response text), when there was an answer.
+  readonly upstreamStatus?: number;
+  constructor(status: number, safeMessage: string, upstreamStatus?: number) {
     super(safeMessage);
     this.name = "GeminiTokenError";
     this.status = status;
+    this.upstreamStatus = upstreamStatus;
   }
 }
 
@@ -60,7 +63,7 @@ export async function createGeminiEphemeralToken(input: {
   } catch {
     throw new GeminiTokenError(502, "token_upstream_unreachable");
   }
-  if (!res.ok) throw new GeminiTokenError(502, "token_upstream_rejected");
+  if (!res.ok) throw new GeminiTokenError(502, "token_upstream_rejected", res.status);
 
   let json: unknown;
   try {
