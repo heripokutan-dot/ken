@@ -11,12 +11,20 @@ export interface AuthConfigEnv {
 export function handleAuthConfig(request: Request, env: AuthConfigEnv): Response {
   if (request.method !== "GET") return errorResponse(405, "method_not_allowed", { Allow: "GET" });
   // 404 with a JSON body: this function ran, but the deployed environment lacks these settings.
-  // Only the NAMES of missing settings are returned, never their values.
+  // Report booleans only so Preview runtime binding issues can be distinguished without exposing values.
   const missing: string[] = [];
   if (env.AUTH_PROVIDER !== "google") missing.push("AUTH_PROVIDER");
   if (!env.GOOGLE_CLIENT_ID) missing.push("GOOGLE_CLIENT_ID");
   if (missing.length > 0) {
-    return new Response(JSON.stringify({ error: "not_configured", missing }), {
+    return new Response(JSON.stringify({
+      error: "not_configured",
+      missing,
+      diagnostic: {
+        authProviderPresent: Boolean(env.AUTH_PROVIDER),
+        authProviderIsGoogle: env.AUTH_PROVIDER === "google",
+        googleClientIdPresent: Boolean(env.GOOGLE_CLIENT_ID),
+      },
+    }), {
       status: 404,
       headers: { ...SECURITY_HEADERS, "Content-Type": "application/json; charset=utf-8" },
     });
