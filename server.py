@@ -23,6 +23,7 @@ SYSTEM_INSTRUCTION = (
 
 logger = logging.getLogger(__name__)
 FRONTEND_DIR = Path(__file__).resolve().parent / "frontend"
+ROOT_ASSET_FILES = frozenset({"app.js", "styles.css", "pcm-worklet.js", "pcm-utils.js", "error-messages.js"})
 
 
 def _is_loopback_host(host: str) -> bool:
@@ -86,6 +87,19 @@ def create_app(*, api_key: str | None = None, token_client: object | None = None
         return FileResponse(FRONTEND_DIR / "index.html", headers={"Cache-Control": "no-store"})
 
     app.mount("/static", StaticFiles(directory=FRONTEND_DIR), name="static")
+
+    # index.html references assets at the root (the same paths the Pages build serves).
+    # Only an explicit allowlist is served from the root, so nothing else in frontend/ is exposed.
+    @app.get("/api/auth-config")
+    async def local_auth_config() -> JSONResponse:
+        # The local prototype has no in-page Google sign-in; it reports that explicitly.
+        return JSONResponse({"provider": "local"}, headers={"Cache-Control": "no-store"})
+
+    @app.get("/{asset_name}")
+    async def serve_root_asset(asset_name: str) -> FileResponse:
+        if asset_name not in ROOT_ASSET_FILES:
+            raise HTTPException(status_code=404, detail="Not found.")
+        return FileResponse(FRONTEND_DIR / asset_name, headers={"Cache-Control": "no-store"})
 
     @app.post("/api/live-token")
     async def create_live_token(request: Request) -> JSONResponse:

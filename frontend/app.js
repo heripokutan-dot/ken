@@ -15,6 +15,7 @@ const SYSTEM_INSTRUCTION =
   "簡潔で親しみやすく、相手の発話に直接答えてください。";
 const AUDIO_SAMPLE_RATE = 24000;
 const INPUT_MIME_TYPE = "audio/pcm;rate=16000";
+const GOOGLE_SCRIPT_TIMEOUT_MS = 10000;
 
 let lifecycle = 0;
 let isStarting = false;
@@ -472,6 +473,7 @@ async function initSignIn() {
       cancel_on_tap_outside: true,
     });
     window.google.accounts.id.renderButton(container, { theme: "outline", size: "large", text: "signin_with", locale: "ja" });
+    clearError();
   };
 
   // The module may finish its config fetch after the window load event has fired.
@@ -484,10 +486,16 @@ async function initSignIn() {
       showError("Google サインインのスクリプトが見つかりません。");
       return;
     }
-    googleScript.addEventListener("load", attachButton, { once: true });
-    googleScript.addEventListener("error", () => {
+    const onLoadFailure = () => {
       showError("Google サインインを読み込めませんでした。通信設定を確認してください。");
-    }, { once: true });
+    };
+    googleScript.addEventListener("load", attachButton, { once: true });
+    googleScript.addEventListener("error", onLoadFailure, { once: true });
+    // If the script failed before the listeners above were attached, no event fires at all.
+    // Check after a deadline so the user is never left with a silent, empty sign-in area.
+    setTimeout(() => {
+      if (!window.google?.accounts?.id) onLoadFailure();
+    }, GOOGLE_SCRIPT_TIMEOUT_MS);
   }
 }
 
