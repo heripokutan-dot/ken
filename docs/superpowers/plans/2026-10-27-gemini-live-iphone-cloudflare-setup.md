@@ -21,14 +21,14 @@ The operator does **not** want to register a payment card. Rule: if any step ask
 | Gate | Where to set it | Missing → |
 | --- | --- | --- |
 | `GEMINI_API_KEY` | Pages **Secret** | 503 `gemini_not_configured` |
-| `AUTH_PROVIDER` = `google` | `wrangler.toml` `[env.preview.vars]` (not secret; dashboard-only plain variables are not applied while the file is the source of truth) | 503 `service_misconfigured` |
-| `GOOGLE_CLIENT_ID` | `wrangler.toml` `[env.preview.vars]` (public OAuth client ID, not secret) | 503 `service_misconfigured` |
+| `AUTH_PROVIDER` = `google` | Pages variable or Secret, per environment | 503 `service_misconfigured` |
+| `GOOGLE_CLIENT_ID` | Pages variable or Secret, per environment | 503 `service_misconfigured` |
 | `ALLOWED_EMAIL` | Pages **Secret** | 503 `service_misconfigured` |
-| `RATE_LIMIT_DB` | Pages **D1 database binding** (`wrangler.toml`: top-level for Production, `[[env.preview.d1_databases]]` for Preview) | 503 `rate_limit_unavailable` |
+| `RATE_LIMIT_DB` | Pages **D1 database binding** (dashboard) | 503 `rate_limit_unavailable` |
 
 Secrets are used for the email and client ID so that personal data does not enter the repository. The Google client ID is public, but keeping it out of Git is simpler.
 
-**Single source of truth:** Secrets are set in the Pages dashboard. The D1 binding is declared in `wrangler.toml` (Pages treats the file as the source of truth, so bindings defined there cannot be edited in the dashboard). Pages supports only `env.production` and `env.preview`; `d1_databases` is not inherited, so Preview has its own `[[env.preview.d1_databases]]` block. Do not put API keys, client IDs, or emails in the file.
+**Single source of truth:** all variables, Secrets and bindings are set in the Pages dashboard, separately for **Production** and **Preview** (use the environment switch). This repository intentionally has **no** `wrangler.toml` / `wrangler.jsonc`: with a Wrangler file, Pages manages variables and bindings from the file and the dashboard accepts only Secrets, and in practice dashboard Secrets did not reach the Preview Functions. If you add a Wrangler file later, expect to move every setting into it. `AUTH_PROVIDER` (`google`) and `GOOGLE_CLIENT_ID` are not secret and may be plain variables; `ALLOWED_EMAIL` and `GEMINI_API_KEY` must be Secrets.
 
 ## 1. Create the Pages project
 
@@ -42,8 +42,8 @@ Secrets are used for the email and client ID so that personal data does not ente
 2. Create an **OAuth client ID** of type **Web application**.
    - Authorized JavaScript origins: the production origin **and every branch-preview origin you test** (exact origin, no path). Each preview has its own hostname, for example `https://fix-wrangler-d1-binding.ken-chl.pages.dev`; Google treats it as a different origin and rejects sign-in from an unregistered one.
    - Redirect URIs are not needed for the Identity Services button flow.
-3. The client ID is declared as `GOOGLE_CLIENT_ID` in `wrangler.toml` (`[env.preview.vars]`; it is public). Put your own Google account email into the `ALLOWED_EMAIL` Secret.
-4. `AUTH_PROVIDER` is declared as `google` in `wrangler.toml` (`[env.preview.vars]`); nothing to set in the dashboard.
+3. Put the client ID into the `GOOGLE_CLIENT_ID` Secret, and your own Google account email into `ALLOWED_EMAIL`.
+4. Set `AUTH_PROVIDER` to `google`.
 
 Verification on the server: the function checks the ID token signature against Google's published keys, the issuer, the audience (your client ID), expiry, `email_verified`, and the exact allowlisted email. The browser keeps the ID token only in memory.
 
