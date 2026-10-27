@@ -35,12 +35,13 @@ test("wrangler_file_declares_the_d1_binding_for_production_and_preview_only", ()
   assert.match(active, /^\[\[env\.preview\.d1_databases\]\]/m);
   assert.doesNotMatch(active, /previews\./);
   assert.equal((active.match(/binding\s*=\s*"RATE_LIMIT_DB"/g) ?? []).length, 2);
-  // Only the non-secret AUTH_PROVIDER may be declared as a plain variable; everything else stays a dashboard Secret.
+  // Only the non-secret AUTH_PROVIDER and the public OAuth GOOGLE_CLIENT_ID may be declared as a plain variable; everything else stays a dashboard Secret.
   const varsBlocks = [...active.matchAll(/^\[(?:env\.[a-z]+\.)?vars\]\n((?:(?!\[).*\n?)*)/gm)];
   for (const block of varsBlocks) {
     const keys = [...block[1].matchAll(/^\s*([A-Z0-9_]+)\s*=/gm)].map((m) => m[1]);
-    assert.deepEqual(keys, ["AUTH_PROVIDER"]);
+    assert.deepEqual(keys, ["AUTH_PROVIDER", "GOOGLE_CLIENT_ID"]);
     assert.match(block[1], /AUTH_PROVIDER\s*=\s*"google"/);
+    assert.match(block[1], /GOOGLE_CLIENT_ID\s*=\s*"[0-9]+-[a-z0-9]+\.apps\.googleusercontent\.com"/);
   }
 });
 
