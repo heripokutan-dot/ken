@@ -11,9 +11,8 @@ export class JwtVerificationError extends Error {
 export interface JwksConfig {
   jwksUrl: string;
   issuers: string[];
-  audience: string[]; // token is accepted if its aud/azp matches any entry
+  audience: string[]; // the token's aud must contain at least one of these (strict; azp is never a substitute)
   nowSeconds?: number;
-  allowAzp?: boolean; // when true, azp may stand in for aud (Google ID tokens)
 }
 
 export interface VerifiedClaims {
@@ -33,12 +32,20 @@ export function clearJwksCache(): void {
   keyCache.clear();
 }
 
-export function base64UrlToBytes(input: string): Uint8Array {
+export function base64UrlToBytes(input: string): Uint8Array<ArrayBuffer> {
   if (!/^[A-Za-z0-9_-]*$/.test(input)) throw new JwtVerificationError();
   const padded = input.replace(/-/g, "+").replace(/_/g, "/").padEnd(Math.ceil(input.length / 4) * 4, "=");
   const bin = atob(padded);
-  const out = new Uint8Array(bin.length);
+  const out = new Uint8Array(new ArrayBuffer(bin.length));
   for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
+  return out;
+}
+
+// Copies into an explicitly ArrayBuffer-backed array (BufferSource requires ArrayBuffer, not ArrayBufferLike).
+function utf8Bytes(text: string): Uint8Array<ArrayBuffer> {
+  const encoded = new TextEncoder().encode(text);
+  const out = new Uint8Array(new ArrayBuffer(encoded.byteLength));
+  out.set(encoded);
   return out;
 }
 
@@ -118,7 +125,7 @@ export async function verifyRs256Jwt(
     "RSASSA-PKCS1-v1_5",
     publicKey,
     base64UrlToBytes(signatureB64),
-    new TextEncoder().encode(`${headerB64}.${payloadB64}`),
+    utf8Bytes(`${headerB64}.${payloadB64}`),
   );
   if (!valid) throw new JwtVerificationError();
 
@@ -127,9 +134,7 @@ export async function verifyRs256Jwt(
 
   const aud = Array.isArray(claims.aud) ? claims.aud : [claims.aud];
   const audOk = aud.some((a) => typeof a === "string" && config.audience.includes(a));
-  const azpOk =
-    config.allowAzp === true && typeof claims.azp === "string" && config.audience.includes(claims.azp);
-  if (!audOk && !azpOk) throw new JwtVerificationError();
+  if (!audOk) throw new JwtVerificationError();
 
   if (typeof claims.exp !== "number" || claims.exp <= nowSec) throw new JwtVerificationError();
   if (claims.nbf !== undefined && (typeof claims.nbf !== "number" || claims.nbf > nowSec)) {

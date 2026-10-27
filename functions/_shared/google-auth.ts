@@ -40,7 +40,6 @@ export async function verifyGoogleIdToken(
         jwksUrl: GOOGLE_JWKS_URL,
         issuers: GOOGLE_ISSUERS,
         audience: [config.clientId],
-        allowAzp: true,
         nowSeconds: config.nowSeconds,
       },
       fetcher,
@@ -48,6 +47,15 @@ export async function verifyGoogleIdToken(
   } catch (err) {
     if (err instanceof JwtVerificationError) throw new GoogleAuthError();
     throw err;
+  }
+
+  // OIDC authorized-party rule: aud must contain our client ID (enforced by the verifier above).
+  // azp, when present, must be our client ID. If aud lists several audiences, azp is required.
+  const aud = Array.isArray(claims.aud) ? claims.aud : [claims.aud];
+  if (claims.azp !== undefined) {
+    if (claims.azp !== config.clientId) throw new GoogleAuthError();
+  } else if (aud.length > 1) {
+    throw new GoogleAuthError();
   }
 
   if (claims.email_verified !== true) throw new GoogleAuthError();

@@ -99,3 +99,38 @@ test("fails_closed_when_key_fetch_fails", async () => {
   const f = jwksFetcher([key.publicJwk], 503, JWKS);
   await expectGoogleError(verifyGoogleIdToken(token, { clientId: CLIENT_ID, allowedEmail: ALLOWED }, f.fetch));
 });
+
+// --- audience / authorized-party rules (OIDC + Google guidance) ---
+
+test("rejects_wrong_aud_even_when_azp_matches_our_client", async () => {
+  // azp alone must never authorize a token whose aud is another client.
+  const { token, fetcher } = await setup({ aud: "other.apps.googleusercontent.com", azp: CLIENT_ID });
+  await expectGoogleError(verifyGoogleIdToken(token, { clientId: CLIENT_ID, allowedEmail: ALLOWED }, fetcher));
+});
+
+test("rejects_azp_that_does_not_match_our_client", async () => {
+  const { token, fetcher } = await setup({ aud: CLIENT_ID, azp: "other.apps.googleusercontent.com" });
+  await expectGoogleError(verifyGoogleIdToken(token, { clientId: CLIENT_ID, allowedEmail: ALLOWED }, fetcher));
+});
+
+test("rejects_missing_aud", async () => {
+  const { token, fetcher } = await setup({ aud: undefined });
+  await expectGoogleError(verifyGoogleIdToken(token, { clientId: CLIENT_ID, allowedEmail: ALLOWED }, fetcher));
+});
+
+test("rejects_multiple_aud_without_azp", async () => {
+  const { token, fetcher } = await setup({ aud: [CLIENT_ID, "other.apps.googleusercontent.com"], azp: undefined });
+  await expectGoogleError(verifyGoogleIdToken(token, { clientId: CLIENT_ID, allowedEmail: ALLOWED }, fetcher));
+});
+
+test("accepts_multiple_aud_when_azp_is_our_client", async () => {
+  const { token, fetcher } = await setup({ aud: [CLIENT_ID, "other.apps.googleusercontent.com"], azp: CLIENT_ID });
+  const result = await verifyGoogleIdToken(token, { clientId: CLIENT_ID, allowedEmail: ALLOWED }, fetcher);
+  assert.equal(result.email, ALLOWED);
+});
+
+test("accepts_single_aud_without_azp", async () => {
+  const { token, fetcher } = await setup({ azp: undefined });
+  const result = await verifyGoogleIdToken(token, { clientId: CLIENT_ID, allowedEmail: ALLOWED }, fetcher);
+  assert.equal(result.email, ALLOWED);
+});
