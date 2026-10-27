@@ -18,3 +18,7 @@ compatibility_date = "2026-10-01"
 binding = "RATE_LIMIT_DB"
 database_name = "ken-rate-limits"
 database_id = "dff10737-8ee4-4c74-a191-67535cfbfb72"
+
+[[previews.d1_databases]]
+binding = "RATE_LIMIT_DB"
+database_id = "aa83ad72-5dfc-4c1e-b14a-7564b9e4de4e"
