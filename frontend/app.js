@@ -441,7 +441,14 @@ async function initSignIn() {
   let config;
   try {
     const res = await fetch("/api/auth-config", { cache: "no-store", credentials: "same-origin" });
-    if (!res.ok) return; // local prototype or Access-protected deployment: no in-page sign-in
+    if (!res.ok) {
+      showError(
+        res.status === 404
+          ? "Googleログインの設定がサーバーにありません。Cloudflare Pages の環境変数 AUTH_PROVIDER と GOOGLE_CLIENT_ID を確認してください。"
+          : `Googleログイン設定を取得できませんでした（HTTP ${res.status}）。Cloudflare Pages の設定とアクセス制御を確認してください。`,
+      );
+      return;
+    }
     config = await res.json();
   } catch {
     return;
