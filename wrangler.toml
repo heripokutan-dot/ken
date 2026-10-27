@@ -2,7 +2,7 @@
 # Do not put API keys, OAuth secrets, account IDs, or personal data in this file.
 #
 # Encrypted application Secrets are configured in the Cloudflare Pages dashboard:
-#   GEMINI_API_KEY, AUTH_PROVIDER ("google"), GOOGLE_CLIENT_ID, ALLOWED_EMAIL
+#   GEMINI_API_KEY, GOOGLE_CLIENT_ID, ALLOWED_EMAIL
 #
 # The D1 database binding is managed here because this Pages project uses wrangler.toml
 # as its source of truth (bindings defined in this file are read-only in the dashboard).
@@ -26,3 +26,8 @@ database_id = "dff10737-8ee4-4c74-a191-67535cfbfb72"
 [[env.preview.d1_databases]]
 binding = "RATE_LIMIT_DB"
 database_id = "aa83ad72-5dfc-4c1e-b14a-7564b9e4de4e"
+
+# AUTH_PROVIDER is not secret. Plain variables set only in the dashboard are not applied while this file is the
+# source of truth, and "vars" is not inherited, so Preview declares it explicitly. Never put secret values here.
+[env.preview.vars]
+AUTH_PROVIDER = "google"

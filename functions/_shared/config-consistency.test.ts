@@ -35,7 +35,13 @@ test("wrangler_file_declares_the_d1_binding_for_production_and_preview_only", ()
   assert.match(active, /^\[\[env\.preview\.d1_databases\]\]/m);
   assert.doesNotMatch(active, /previews\./);
   assert.equal((active.match(/binding\s*=\s*"RATE_LIMIT_DB"/g) ?? []).length, 2);
-  assert.doesNotMatch(active, /\[vars\]|\[env\.[a-z]+\.vars\]/);
+  // Only the non-secret AUTH_PROVIDER may be declared as a plain variable; everything else stays a dashboard Secret.
+  const varsBlocks = [...active.matchAll(/^\[(?:env\.[a-z]+\.)?vars\]\n((?:(?!\[).*\n?)*)/gm)];
+  for (const block of varsBlocks) {
+    const keys = [...block[1].matchAll(/^\s*([A-Z0-9_]+)\s*=/gm)].map((m) => m[1]);
+    assert.deepEqual(keys, ["AUTH_PROVIDER"]);
+    assert.match(block[1], /AUTH_PROVIDER\s*=\s*"google"/);
+  }
 });
 
 test("secret_and_variable_names_in_docs_match_the_code_interface", () => {
