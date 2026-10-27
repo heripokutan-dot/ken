@@ -2,7 +2,19 @@
 
 > **Status:** Checklist only. The implementation has not performed any of these steps. Each Cloudflare account change, secret entry, and deployment requires explicit user authorization.
 
-This guide describes how the hosted app is configured. It deliberately avoids Cloudflare Zero Trust (Access), which requires payment details to activate even on the free plan. The local FastAPI prototype (`server.py`) is a separate path and is not affected.
+This guide describes how the hosted app is configured. It does not use Cloudflare Zero Trust (Access). The official Cloudflare One setup documentation says onboarding asks for payment details even when the Zero Trust Free plan is chosen (it states you will not be charged). Whether that applies to your account or screen has not been verified here. The local FastAPI prototype (`server.py`) is a separate path and is not affected.
+
+## Payment details: policy and status
+
+The operator does **not** want to register a payment card. Rule: if any step asks for payment or card details, **stop**, do not enter them, and report the service and the step to the user.
+
+| Service | Requirement | Status |
+| --- | --- | --- |
+| Cloudflare Pages (project, Secrets, bindings) | not verified | Unverified; stop if payment details are requested |
+| Cloudflare D1 (database for rate limiting) | not verified | Unverified; stop if payment details are requested |
+| Google Cloud (OAuth consent screen and Web client ID) | not verified | Unverified; stop if billing is requested |
+| Cloudflare Zero Trust / Access | not used by this design | Official docs say payment details are requested during onboarding; not needed here |
+| Gemini API | separate from this guide | Quota and billing are governed by your Gemini API account (outside this repository) |
 
 ## 0. Gates (the endpoint fails closed until all are present)
 
@@ -24,7 +36,7 @@ Secrets are used for the email and client ID so that personal data does not ente
 2. Build output directory: `frontend`. No build command.
 3. Keep automatic production deployment from workflows disabled until deployment is explicitly approved.
 
-## 2. Sign-in with Google (no payment method needed)
+## 2. Sign-in with Google
 
 1. In Google Cloud Console, create a project (if you do not have one) and configure the **OAuth consent screen** (External, testing mode is fine for one user).
 2. Create an **OAuth client ID** of type **Web application**.
@@ -35,7 +47,7 @@ Secrets are used for the email and client ID so that personal data does not ente
 
 Verification on the server: the function checks the ID token signature against Google's published keys, the issuer, the audience (your client ID), expiry, `email_verified`, and the exact allowlisted email. The browser keeps the ID token only in memory.
 
-> **Unverified:** whether creating an OAuth client needs a billing account in your Google Cloud project. Check the console before starting; if billing is requested, stop and report it.
+> **Unverified:** whether creating an OAuth client needs a billing account in your Google Cloud project. Check the console before starting. If billing or payment details are requested, stop and report it; do not add a card.
 
 ## 3. Add the Gemini API key as a Secret
 
@@ -62,7 +74,7 @@ Verification on the server: the function checks the ID token signature against G
 
 **Alternative (not recommended unless you accept the trade-off):** declare the binding in `wrangler.toml` with `[[d1_databases]]`, `binding = "RATE_LIMIT_DB"`, and your own `database_id` entered locally. That locks these fields in the dashboard and puts an account-specific ID into the repository, which this project avoids.
 
-> **Unverified:** whether creating a D1 database on your account requires payment details, and whether it is included in the free plan for your account. Check the dashboard before creating anything; if payment details are requested, stop and report it rather than adding them.
+> **Unverified:** whether creating a D1 database on your account requires payment details, and whether it is included in the free plan for your account. Check the dashboard before creating anything. If payment details are requested, stop and report it; do not add a card.
 >
 > The Rate Limiting binding is intentionally not used: it is not in the list of supported Pages Functions bindings (Cloudflare docs, Pages Functions bindings page).
 

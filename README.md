@@ -6,7 +6,7 @@ Python のローカルサーバーとブラウザーを使い、日本語で Gem
 
 ### ホスト版（Cloudflare Pages・iPhone Safari 向け）
 
-`frontend/` を Cloudflare Pages で配信し、`functions/api/live-token.ts` がトークンを発行する構成です。PC を起動しておく必要はありません。利用は Google サインインで、許可された本人のアカウントのみです（カード登録が不要な構成です）。
+`frontend/` を Cloudflare Pages で配信し、`functions/api/live-token.ts` がトークンを発行する構成です。PC を起動しておく必要はありません。利用は Google サインインで、許可された本人のアカウントのみです（カード登録を前提としない構成です。ただし、各サービスで支払い情報を求められる可能性は未確認のため、求められた場合は手順書の指示どおり停止してください）。
 
 - 配置・Secret・サインイン・D1 によるレート制限の手順は [セットアップガイド](docs/superpowers/plans/2026-10-27-gemini-live-iphone-cloudflare-setup.md) を参照してください。
 - 設定が揃うまでトークン API は安全側に倒れ（503）、トークンを発行しません。
