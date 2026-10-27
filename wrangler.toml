@@ -5,7 +5,11 @@
 #   GEMINI_API_KEY, AUTH_PROVIDER ("google"), GOOGLE_CLIENT_ID, ALLOWED_EMAIL
 #
 # The D1 database binding is managed here because this Pages project uses wrangler.toml
-# for bindings. Keep the database ID aligned with the D1 database created for this project.
+# as its source of truth (bindings defined in this file are read-only in the dashboard).
+# Pages supports only [env.production] and [env.preview] for per-environment settings, and
+# d1_databases is NOT inherited: the top-level binding applies to Production, and Preview needs its own
+# [[env.preview.d1_databases]] block. (A "previews" key is not a Pages setting and is ignored.)
+# Keep the database IDs aligned with the D1 databases created for this project.
 # See docs/superpowers/plans/2026-10-27-gemini-live-iphone-cloudflare-setup.md.
 #
 # The token endpoint fails closed (503) until RATE_LIMIT_DB and the sign-in settings are present.
@@ -19,6 +23,6 @@ binding = "RATE_LIMIT_DB"
 database_name = "ken-rate-limits"
 database_id = "dff10737-8ee4-4c74-a191-67535cfbfb72"
 
-[[previews.d1_databases]]
+[[env.preview.d1_databases]]
 binding = "RATE_LIMIT_DB"
 database_id = "aa83ad72-5dfc-4c1e-b14a-7564b9e4de4e"

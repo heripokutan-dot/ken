@@ -25,15 +25,17 @@ test("code_reads_the_d1_binding_named_in_the_docs", () => {
   assert.match(read("wrangler.toml"), /RATE_LIMIT_DB/);
 });
 
-test("wrangler_file_does_not_also_declare_dashboard_managed_bindings", () => {
-  // Pages: fields defined in the Wrangler file cannot be edited in the dashboard afterwards.
-  // Bindings and Secrets are therefore configured in the dashboard only; the file holds build settings.
+test("wrangler_file_declares_the_d1_binding_for_production_and_preview_only", () => {
+  // Pages treats wrangler.toml as the source of truth: bindings defined there cannot be edited in the dashboard.
+  // d1_databases is not inherited, so Preview needs [[env.preview.d1_databases]]. "previews" is not a Pages key.
+  // Secrets (GEMINI_API_KEY, GOOGLE_CLIENT_ID, ALLOWED_EMAIL, ...) stay in the dashboard, never in this file.
   const wrangler = read("wrangler.toml");
-  const activeLines = wrangler.split("\n").filter((l) => !l.trimStart().startsWith("#"));
-  const active = activeLines.join("\n");
-  assert.doesNotMatch(active, /\[\[d1_databases\]\]/);
-  assert.doesNotMatch(active, /database_id/);
-  assert.doesNotMatch(active, /\[vars\]/);
+  const active = wrangler.split("\n").filter((l) => !l.trimStart().startsWith("#")).join("\n");
+  assert.match(active, /^\[\[d1_databases\]\]/m);
+  assert.match(active, /^\[\[env\.preview\.d1_databases\]\]/m);
+  assert.doesNotMatch(active, /previews\./);
+  assert.equal((active.match(/binding\s*=\s*"RATE_LIMIT_DB"/g) ?? []).length, 2);
+  assert.doesNotMatch(active, /\[vars\]|\[env\.[a-z]+\.vars\]/);
 });
 
 test("secret_and_variable_names_in_docs_match_the_code_interface", () => {

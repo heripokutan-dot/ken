@@ -24,11 +24,11 @@ The operator does **not** want to register a payment card. Rule: if any step ask
 | `AUTH_PROVIDER` = `google` | Pages **Secret** | 503 `service_misconfigured` |
 | `GOOGLE_CLIENT_ID` | Pages **Secret** | 503 `service_misconfigured` |
 | `ALLOWED_EMAIL` | Pages **Secret** | 503 `service_misconfigured` |
-| `RATE_LIMIT_DB` | Pages **D1 database binding** (dashboard) | 503 `rate_limit_unavailable` |
+| `RATE_LIMIT_DB` | Pages **D1 database binding** (`wrangler.toml`: top-level for Production, `[[env.preview.d1_databases]]` for Preview) | 503 `rate_limit_unavailable` |
 
 Secrets are used for the email and client ID so that personal data does not enter the repository. The Google client ID is public, but keeping it out of Git is simpler.
 
-**Single source of truth:** all Secrets and bindings are set in the Pages dashboard. `wrangler.toml` holds only build settings. Do not define the same bindings in both places: Pages does not let you edit fields that are defined in the Wrangler file.
+**Single source of truth:** Secrets are set in the Pages dashboard. The D1 binding is declared in `wrangler.toml` (Pages treats the file as the source of truth, so bindings defined there cannot be edited in the dashboard). Pages supports only `env.production` and `env.preview`; `d1_databases` is not inherited, so Preview has its own `[[env.preview.d1_databases]]` block. Do not put API keys, client IDs, or emails in the file.
 
 ## 1. Create the Pages project
 
