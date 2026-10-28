@@ -55,7 +55,10 @@ export function tokenErrorMessage(status, code, body) {
   if (status === 503) {
     const base = "サーバーの設定が完了していません。管理者に設定状況を確認してください。";
     const hint = typeof code === "string" && Object.hasOwn(SERVER_SETUP_HINTS, code) ? SERVER_SETUP_HINTS[code] : "";
-    return hint ? `${base}${hint}` : base;
+    const known = ["ALLOWED_EMAIL", "AUTH_PROVIDER", "GOOGLE_CLIENT_ID", "ACCESS_TEAM_DOMAIN", "ACCESS_AUDIENCE"];
+    const names = Array.isArray(body?.missing) ? body.missing.filter((n) => known.includes(n)) : [];
+    const detail = names.length ? `届いていない設定: ${names.join("、")}。` : "";
+    return hint ? `${base}${detail || hint}` : base;
   }
   if (status === 502) {
     const base = "Gemini Live のトークンを作成できませんでした。しばらくしてから、もう一度お試しください。";

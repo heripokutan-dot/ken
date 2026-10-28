@@ -64,6 +64,12 @@ test("token endpoint 502 shows only the reason code and numeric upstream status"
   assert.doesNotMatch(tokenErrorMessage(502, "x", { reason: "token_upstream_rejected", upstream_status: "abc" }), /abc/);
 });
 
+test("token endpoint 503 lists only known missing setting names", () => {
+  const m = tokenErrorMessage(503, "service_misconfigured", { missing: ["ALLOWED_EMAIL", "<script>x</script>"] });
+  assert.match(m, /届いていない設定: ALLOWED_EMAIL。/);
+  assert.doesNotMatch(m, /script/);
+});
+
 test("unknown token endpoint statuses fall back to a retry message", () => {
   assert.match(tokenErrorMessage(500), /再試行/);
 });
