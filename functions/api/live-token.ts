@@ -110,10 +110,13 @@ export async function handleLiveToken(
   } catch (err) {
     if (err instanceof GeminiTokenError && err.status === 503) return errorResponse(503, "gemini_not_configured");
     // Safe diagnostics only: a fixed reason code and Google's HTTP status number. Never key, token or provider text.
-    const detail: { reason?: string; upstream_status?: number } = {};
+    const detail: Record<string, string | number> = {};
     if (err instanceof GeminiTokenError) {
       detail.reason = err.message;
-      if (Number.isInteger(err.upstreamStatus)) detail.upstream_status = err.upstreamStatus;
+      if (Number.isInteger(err.upstreamStatus)) detail.upstream_status = err.upstreamStatus as number;
+      if (err.upstreamCode) detail.upstream_code = err.upstreamCode;
+      if (err.upstreamReason) detail.upstream_reason = err.upstreamReason;
+      if (err.upstreamField) detail.upstream_field = err.upstreamField;
     }
     return new Response(JSON.stringify({ error: "token_issue_failed", ...detail }), {
       status: 502,

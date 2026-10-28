@@ -70,6 +70,18 @@ test("token endpoint 503 lists only known missing setting names", () => {
   assert.doesNotMatch(m, /script/);
 });
 
+test("token endpoint 502 shows allowlisted Google error type, reason and field only", () => {
+  const m = tokenErrorMessage(502, "token_issue_failed", {
+    reason: "token_upstream_rejected", upstream_status: 400, upstream_code: "INVALID_ARGUMENT",
+    upstream_reason: "API_KEY_INVALID", upstream_field: "config.systemInstruction",
+  });
+  assert.match(m, /種別: INVALID_ARGUMENT/);
+  assert.match(m, /理由: API_KEY_INVALID/);
+  assert.match(m, /項目: config.systemInstruction/);
+  const bad = tokenErrorMessage(502, "x", { reason: "token_upstream_rejected", upstream_status: 400, upstream_code: "bad value <x>", upstream_field: "a b" });
+  assert.doesNotMatch(bad, /bad value|<x>|a b/);
+});
+
 test("unknown token endpoint statuses fall back to a retry message", () => {
   assert.match(tokenErrorMessage(500), /再試行/);
 });
