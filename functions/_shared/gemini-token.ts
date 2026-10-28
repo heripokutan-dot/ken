@@ -15,11 +15,13 @@ export class GeminiTokenError extends Error {
   readonly upstreamCode?: string;
   readonly upstreamReason?: string;
   readonly upstreamField?: string;
+  // Google's short validation text, kept only if it is plain, short and does not contain the API key.
+  readonly upstreamDetail?: string;
   constructor(
     status: number,
     safeMessage: string,
     upstreamStatus?: number,
-    extra: { code?: string; reason?: string; field?: string } = {},
+    extra: { code?: string; reason?: string; field?: string; detail?: string } = {},
   ) {
     super(safeMessage);
     this.name = "GeminiTokenError";
@@ -28,6 +30,7 @@ export class GeminiTokenError extends Error {
     this.upstreamCode = extra.code;
     this.upstreamReason = extra.reason;
     this.upstreamField = extra.field;
+    this.upstreamDetail = extra.detail;
   }
 }
 
@@ -49,18 +52,32 @@ const GOOGLE_REASONS = new Set([
 const FIELD_PATH = /^[A-Za-z][A-Za-z0-9_.\[\]]{0,79}$/;
 
 // Extracts only allowlisted enums and a schema field path from a Google error body. Everything else is dropped.
-async function safeGoogleErrorInfo(res: Response): Promise<{ code?: string; reason?: string; field?: string }> {
+function safeDetail(text: unknown, apiKey: string): string | undefined {
+  if (typeof text !== "string") return undefined;
+  const flat = text.replace(/\s+/g, " ").trim();
+  if (!flat || flat.length > 200) return undefined;
+  if (apiKey && flat.includes(apiKey)) return undefined;
+  if (/AIza[0-9A-Za-z_-]{10,}/.test(flat)) return undefined;
+  return flat;
+}
+
+async function safeGoogleErrorInfo(
+  res: Response,
+  apiKey: string,
+): Promise<{ code?: string; reason?: string; field?: string; detail?: string }> {
   try {
-    const err = ((await res.json()) as { error?: { status?: unknown; details?: unknown } })?.error;
-    const out: { code?: string; reason?: string; field?: string } = {};
+    const err = ((await res.json()) as { error?: { status?: unknown; message?: unknown; details?: unknown } })?.error;
+    const out: { code?: string; reason?: string; field?: string; detail?: string } = {};
     if (typeof err?.status === "string" && GOOGLE_CODES.has(err.status)) out.code = err.status;
     if (Array.isArray(err?.details)) {
       for (const d of err.details as Array<Record<string, unknown>>) {
         if (!out.reason && typeof d?.reason === "string" && GOOGLE_REASONS.has(d.reason)) out.reason = d.reason;
         const v = Array.isArray(d?.fieldViolations) ? (d.fieldViolations as Array<Record<string, unknown>>)[0] : undefined;
         if (!out.field && typeof v?.field === "string" && FIELD_PATH.test(v.field)) out.field = v.field;
+        if (!out.detail) out.detail = safeDetail(v?.description, apiKey);
       }
     }
+    if (!out.detail) out.detail = safeDetail(err?.message, apiKey);
     return out;
   } catch {
     return {};
@@ -103,7 +120,7 @@ export async function createGeminiEphemeralToken(input: {
   } catch {
     throw new GeminiTokenError(502, "token_upstream_unreachable");
   }
-  if (!res.ok) throw new GeminiTokenError(502, "token_upstream_rejected", res.status, await safeGoogleErrorInfo(res));
+  if (!res.ok) throw new GeminiTokenError(502, "token_upstream_rejected", res.status, await safeGoogleErrorInfo(res, input.apiKey));
 
   let json: unknown;
   try {

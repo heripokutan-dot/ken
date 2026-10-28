@@ -117,6 +117,25 @@ test("exposes_only_allowlisted_google_error_enums_and_field_paths", async () => 
   );
 });
 
+test("keeps_short_google_validation_text_but_never_a_key", async () => {
+  const mk = (description: string) =>
+    recordingFetch(() => new Response(JSON.stringify({ error: { status: "INVALID_ARGUMENT", details: [{ fieldViolations: [{ field: "auth_token", description }] }] } }), { status: 400 }));
+  const ok = mk("Unknown name \"foo\" at 'auth_token': Cannot find field.");
+  await assert.rejects(createGeminiEphemeralToken({ apiKey: KEY, fetcher: ok.fetch, now: NOW }), (e: unknown) => {
+    assert.ok(e instanceof GeminiTokenError);
+    assert.equal(e.upstreamDetail, "Unknown name \"foo\" at 'auth_token': Cannot find field.");
+    return true;
+  });
+  for (const bad of [`echo ${KEY}`, "x".repeat(300), "AIzaSyABCDEFGHIJKLMNOP leaked"]) {
+    const f = mk(bad);
+    await assert.rejects(createGeminiEphemeralToken({ apiKey: KEY, fetcher: f.fetch, now: NOW }), (e: unknown) => {
+      assert.ok(e instanceof GeminiTokenError);
+      assert.equal(e.upstreamDetail, undefined);
+      return true;
+    });
+  }
+});
+
 test("drops_unlisted_enums_and_unsafe_field_paths", async () => {
   const body = { error: { status: `LEAK ${KEY}`, details: [{ reason: KEY, fieldViolations: [{ field: `x ${KEY}` }] }] } };
   const f = recordingFetch(() => new Response(JSON.stringify(body), { status: 400 }));

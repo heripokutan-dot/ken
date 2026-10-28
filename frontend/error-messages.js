@@ -36,7 +36,11 @@ function geminiFailureHint(body) {
     const code = safe(body?.upstream_code, /^[A-Z_]{3,40}$/);
     const why = safe(body?.upstream_reason, /^[A-Z_]{3,60}$/);
     const field = safe(body?.upstream_field, /^[A-Za-z][A-Za-z0-9_.\[\]]{0,79}$/);
-    const extra = [code && `種別: ${code}`, why && `理由: ${why}`, field && `項目: ${field}`].filter(Boolean).join("、");
+    const rawDetail = typeof body?.upstream_detail === "string" ? body.upstream_detail.replace(/\s+/g, " ").trim() : "";
+    const detail = rawDetail && rawDetail.length <= 200 && !/AIza[0-9A-Za-z_-]{10,}/.test(rawDetail) ? rawDetail : "";
+    const extra = [code && `種別: ${code}`, why && `理由: ${why}`, field && `項目: ${field}`, detail && `詳細: ${detail}`]
+      .filter(Boolean)
+      .join("、");
     return `Gemini に拒否されました${n}。${extra ? `${extra}。` : ""}API キーの値と権限、リクエスト内容を確認してください。`;
   }
   if (reason === "token_upstream_unreachable") return "Gemini に接続できませんでした。";

@@ -82,6 +82,13 @@ test("token endpoint 502 shows allowlisted Google error type, reason and field o
   assert.doesNotMatch(bad, /bad value|<x>|a b/);
 });
 
+test("token endpoint 502 shows short Google validation text and hides key-shaped text", () => {
+  const ok = tokenErrorMessage(502, "x", { reason: "token_upstream_rejected", upstream_status: 400, upstream_detail: "Unknown name at 'auth_token'" });
+  assert.match(ok, /詳細: Unknown name at 'auth_token'/);
+  const bad = tokenErrorMessage(502, "x", { reason: "token_upstream_rejected", upstream_status: 400, upstream_detail: "AIzaSyABCDEFGHIJKLMNOP" });
+  assert.doesNotMatch(bad, /AIza/);
+});
+
 test("unknown token endpoint statuses fall back to a retry message", () => {
   assert.match(tokenErrorMessage(500), /再試行/);
 });

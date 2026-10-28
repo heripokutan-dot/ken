@@ -117,6 +117,7 @@ export async function handleLiveToken(
       if (err.upstreamCode) detail.upstream_code = err.upstreamCode;
       if (err.upstreamReason) detail.upstream_reason = err.upstreamReason;
       if (err.upstreamField) detail.upstream_field = err.upstreamField;
+      if (err.upstreamDetail) detail.upstream_detail = err.upstreamDetail;
     }
     return new Response(JSON.stringify({ error: "token_issue_failed", ...detail }), {
       status: 502,
