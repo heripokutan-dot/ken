@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { userFacingError, tokenErrorMessage } from "../frontend/error-messages.js";
+import { userFacingError, tokenErrorMessage, closeDetail } from "../frontend/error-messages.js";
 
 test("microphone permission errors are explained in Japanese", () => {
   assert.equal(
@@ -91,4 +91,12 @@ test("token endpoint 502 shows short Google validation text and hides key-shaped
 
 test("unknown token endpoint statuses fall back to a retry message", () => {
   assert.match(tokenErrorMessage(500), /再試行/);
+});
+
+test("websocket close detail shows the code and a short plain reason only", () => {
+  assert.equal(closeDetail(1007, "Invalid JSON payload"), "コード 1007、理由: Invalid JSON payload");
+  assert.equal(closeDetail(1006, ""), "コード 1006");
+  assert.equal(closeDetail(undefined, "x".repeat(300)), "");
+  assert.doesNotMatch(closeDetail(1008, "bad AIzaSyABCDEFGHIJKLMNOP"), /AIza/);
+  assert.doesNotMatch(closeDetail(1008, "token auth_tokens/abc"), /auth_tokens/);
 });

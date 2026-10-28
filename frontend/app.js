@@ -1,5 +1,5 @@
 import { pcm16ToFloat } from "./pcm-utils.js";
-import { userFacingError, tokenErrorMessage } from "./error-messages.js";
+import { userFacingError, tokenErrorMessage, closeDetail } from "./error-messages.js";
 
 const statusElement = document.querySelector("#status");
 const statusText = document.querySelector("#status-text");
@@ -242,13 +242,15 @@ async function failSession(message) {
   updateControls();
 }
 
+let lastCloseDetail = "";
+
 async function handleUnexpectedClose() {
   if (!isStarting && !isConnected) return;
   lifecycle += 1;
   isStarting = false;
   isConnected = false;
   await releaseAudioResources({ closeSocket: false });
-  showError("Gemini Live との接続が切れました。「会話を開始」から再接続してください。");
+  showError(`Gemini Live との接続が切れました。「会話を開始」から再接続してください。${lastCloseDetail ? `（${lastCloseDetail}）` : ""}`);
   setStatus("接続が切断されました", "error");
   updateControls();
 }
@@ -304,9 +306,10 @@ function connectWebSocket(token, model, websocketBaseUrl, runId) {
       }
     });
 
-    activeSocket.addEventListener("close", () => {
+    activeSocket.addEventListener("close", (closeEvent) => {
+      lastCloseDetail = closeDetail(closeEvent?.code, closeEvent?.reason);
       if (!setupFinished) {
-        reject(new Error("Gemini Live の接続がセットアップ完了前に終了しました。"));
+        reject(new Error(`Gemini Live の接続がセットアップ完了前に終了しました。${lastCloseDetail ? `（${lastCloseDetail}）` : ""}`));
       }
       if (socket === activeSocket) {
         socket = null;

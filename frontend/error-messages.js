@@ -75,3 +75,12 @@ export function tokenErrorMessage(status, code, body) {
   }
   return "セッションを開始できませんでした。しばらくしてから再試行してください。";
 }
+
+// Describes why the Gemini Live WebSocket closed, using only the numeric close code and a short, plain reason.
+// Key-shaped strings, tokens and long text are dropped so nothing sensitive can reach the page.
+export function closeDetail(code, reason) {
+  const c = Number.isInteger(code) && code >= 1000 && code <= 4999 ? `コード ${code}` : "";
+  let r = typeof reason === "string" ? reason.replace(/\s+/g, " ").trim() : "";
+  if (r.length > 200 || /AIza[0-9A-Za-z_-]{10,}|auth_tokens\/|access_token|Bearer\s/i.test(r)) r = "";
+  return [c, r && `理由: ${r}`].filter(Boolean).join("、");
+}
