@@ -21,14 +21,14 @@ The operator does **not** want to register a payment card. Rule: if any step ask
 | Gate | Where to set it | Missing → |
 | --- | --- | --- |
 | `GEMINI_API_KEY` | Pages **Secret** | 503 `gemini_not_configured` |
-| `AUTH_PROVIDER` = `google` | Pages **Secret** | 503 `service_misconfigured` |
-| `GOOGLE_CLIENT_ID` | Pages **Secret** | 503 `service_misconfigured` |
+| `AUTH_PROVIDER` = `google` | Pages variable or Secret, per environment | 503 `service_misconfigured` |
+| `GOOGLE_CLIENT_ID` | Pages variable or Secret, per environment | 503 `service_misconfigured` |
 | `ALLOWED_EMAIL` | Pages **Secret** | 503 `service_misconfigured` |
 | `RATE_LIMIT_DB` | Pages **D1 database binding** (dashboard) | 503 `rate_limit_unavailable` |
 
 Secrets are used for the email and client ID so that personal data does not enter the repository. The Google client ID is public, but keeping it out of Git is simpler.
 
-**Single source of truth:** all Secrets and bindings are set in the Pages dashboard. `wrangler.toml` holds only build settings. Do not define the same bindings in both places: Pages does not let you edit fields that are defined in the Wrangler file.
+**Single source of truth:** all variables, Secrets and bindings are set in the Pages dashboard, separately for **Production** and **Preview** (use the environment switch). This repository intentionally has **no** `wrangler.toml` / `wrangler.jsonc`: with a Wrangler file, Pages manages variables and bindings from the file and the dashboard accepts only Secrets, and in practice dashboard Secrets did not reach the Preview Functions. If you add a Wrangler file later, expect to move every setting into it. `AUTH_PROVIDER` (`google`) and `GOOGLE_CLIENT_ID` are not secret and may be plain variables; `ALLOWED_EMAIL` and `GEMINI_API_KEY` must be Secrets.
 
 ## 1. Create the Pages project
 
@@ -40,7 +40,7 @@ Secrets are used for the email and client ID so that personal data does not ente
 
 1. In Google Cloud Console, create a project (if you do not have one) and configure the **OAuth consent screen** (External, testing mode is fine for one user).
 2. Create an **OAuth client ID** of type **Web application**.
-   - Authorized JavaScript origins: `https://<your-pages-hostname>` (exact origin, no path).
+   - Authorized JavaScript origins: the production origin **and every branch-preview origin you test** (exact origin, no path). Each preview has its own hostname, for example `https://fix-wrangler-d1-binding.ken-chl.pages.dev`; Google treats it as a different origin and rejects sign-in from an unregistered one.
    - Redirect URIs are not needed for the Identity Services button flow.
 3. Put the client ID into the `GOOGLE_CLIENT_ID` Secret, and your own Google account email into `ALLOWED_EMAIL`.
 4. Set `AUTH_PROVIDER` to `google`.
@@ -48,6 +48,18 @@ Secrets are used for the email and client ID so that personal data does not ente
 Verification on the server: the function checks the ID token signature against Google's published keys, the issuer, the audience (your client ID), expiry, `email_verified`, and the exact allowlisted email. The browser keeps the ID token only in memory.
 
 > **Unverified:** whether creating an OAuth client needs a billing account in your Google Cloud project. Check the console before starting. If billing or payment details are requested, stop and report it; do not add a card.
+
+### 2a. Troubleshooting Google sign-in by symptom
+
+Use the on-page message to narrow down the cause before changing anything.
+
+| What you see | Meaning | Where to look |
+| --- | --- | --- |
+| 「Googleログインの設定がサーバーにありません」 | `/api/auth-config` returned 404: `AUTH_PROVIDER` or `GOOGLE_CLIENT_ID` is not set for the environment you are viewing | Pages settings for that environment (Production and Preview are configured separately; confirm the Preview environment has the same Secrets) |
+| 「Googleログイン設定を取得できませんでした（HTTP 500）」 | The Function failed | Pages deployment logs for that deployment |
+| 「Google サインインを読み込めませんでした」 | `accounts.google.com/gsi/client` did not load (network or a content blocker) | Network, Safari content blockers, or try again on another network |
+| Button shows, but nothing happens after clicking | Google rejected the request inside its own popup, usually an unregistered origin or a client ID from another Google project. The page cannot see this error. | Google Cloud Console: the OAuth client's Authorized JavaScript origins and project; the browser's developer tools on the Google popup |
+| Start button stays disabled after a successful sign-in | The ID token was not accepted by `/api/live-token` (401) | Message shown after pressing start; check `ALLOWED_EMAIL` and the sign-in account |
 
 ## 3. Add the Gemini API key as a Secret
 

@@ -66,19 +66,29 @@ export async function handleLiveToken(
   if (rejected) return rejected;
 
   // Fail closed on incomplete configuration; never fall back to an open endpoint.
-  if (!env.ALLOWED_EMAIL) return errorResponse(503, "service_misconfigured");
-  if (env.AUTH_PROVIDER === "google" && !env.GOOGLE_CLIENT_ID) return errorResponse(503, "service_misconfigured");
-  if (env.AUTH_PROVIDER === "access" && (!env.ACCESS_TEAM_DOMAIN || !env.ACCESS_AUDIENCE)) {
-    return errorResponse(503, "service_misconfigured");
+  // The 503 body names missing settings (names only, never values) so a wrong environment is easy to spot.
+  const missing: string[] = [];
+  if (!env.ALLOWED_EMAIL) missing.push("ALLOWED_EMAIL");
+  if (env.AUTH_PROVIDER === "google") {
+    if (!env.GOOGLE_CLIENT_ID) missing.push("GOOGLE_CLIENT_ID");
+  } else if (env.AUTH_PROVIDER === "access") {
+    if (!env.ACCESS_TEAM_DOMAIN) missing.push("ACCESS_TEAM_DOMAIN");
+    if (!env.ACCESS_AUDIENCE) missing.push("ACCESS_AUDIENCE");
+  } else {
+    missing.push("AUTH_PROVIDER");
   }
-  if (env.AUTH_PROVIDER !== "google" && env.AUTH_PROVIDER !== "access") {
-    return errorResponse(503, "service_misconfigured");
+  if (missing.length > 0) {
+    return new Response(JSON.stringify({ error: "service_misconfigured", missing }), {
+      status: 503,
+      headers: { ...SECURITY_HEADERS, "Content-Type": "application/json; charset=utf-8" },
+    });
   }
+  const allowedEmail = env.ALLOWED_EMAIL as string;
 
-  const auth = await authenticate(request, env, fetcher, env.ALLOWED_EMAIL);
+  const auth = await authenticate(request, env, fetcher, allowedEmail);
   if (auth instanceof Response) return auth;
 
-  if (auth.email.trim().toLowerCase() !== env.ALLOWED_EMAIL.trim().toLowerCase()) {
+  if (auth.email.trim().toLowerCase() !== allowedEmail.trim().toLowerCase()) {
     return errorResponse(403, "forbidden");
   }
 
@@ -99,7 +109,20 @@ export async function handleLiveToken(
     );
   } catch (err) {
     if (err instanceof GeminiTokenError && err.status === 503) return errorResponse(503, "gemini_not_configured");
-    return errorResponse(502, "token_issue_failed");
+    // Safe diagnostics only: a fixed reason code and Google's HTTP status number. Never key, token or provider text.
+    const detail: Record<string, string | number> = {};
+    if (err instanceof GeminiTokenError) {
+      detail.reason = err.message;
+      if (Number.isInteger(err.upstreamStatus)) detail.upstream_status = err.upstreamStatus as number;
+      if (err.upstreamCode) detail.upstream_code = err.upstreamCode;
+      if (err.upstreamReason) detail.upstream_reason = err.upstreamReason;
+      if (err.upstreamField) detail.upstream_field = err.upstreamField;
+      if (err.upstreamDetail) detail.upstream_detail = err.upstreamDetail;
+    }
+    return new Response(JSON.stringify({ error: "token_issue_failed", ...detail }), {
+      status: 502,
+      headers: { ...SECURITY_HEADERS, "Content-Type": "application/json; charset=utf-8" },
+    });
   }
 }
 

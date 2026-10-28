@@ -31,18 +31,26 @@ test("locks_model_and_single_use", async () => {
   await createGeminiEphemeralToken({ apiKey: KEY, fetcher: f.fetch, now: NOW });
   const body = JSON.parse(String(f.calls[0].init.body));
   assert.equal(body.uses, 1);
-  assert.equal(body.liveConnectConstraints.model, `models/${MODEL_ID}`);
+  assert.equal(body.bidiGenerateContentSetup.model, `models/${MODEL_ID}`);
   assert.equal(MODEL_ID, "gemini-3.8-live");
+});
+
+test("token_body_uses_the_rest_field_names_google_accepts", async () => {
+  const f = recordingFetch(okToken);
+  await createGeminiEphemeralToken({ apiKey: KEY, fetcher: f.fetch, now: NOW });
+  const body = JSON.parse(String(f.calls[0].init.body));
+  assert.deepEqual(Object.keys(body).sort(), ["bidiGenerateContentSetup", "expireTime", "newSessionExpireTime", "uses"]);
+  assert.equal("liveConnectConstraints" in body, false, "Google rejects liveConnectConstraints on the REST resource");
+  assert.deepEqual(body.bidiGenerateContentSetup, { model: `models/${MODEL_ID}` });
 });
 
 test("sets_short_session_start_window", async () => {
   const f = recordingFetch(okToken);
   await createGeminiEphemeralToken({ apiKey: KEY, fetcher: f.fetch, now: NOW });
   const body = JSON.parse(String(f.calls[0].init.body));
-  assert.equal(body.newSessionExpireTime, "2026-10-27T00:01:00.000Z");
-  assert.equal(body.expireTime, "2026-10-27T00:30:00.000Z");
-  assert.deepEqual(body.liveConnectConstraints.config.responseModalities, ["AUDIO"]);
-});
+  assert.equal(body.newSessionExpireTime, "2026-10-27T00:01:00Z");
+  assert.equal(body.expireTime, "2026-10-27T00:30:00Z");
+  });
 
 test("returns_expected_token_shape", async () => {
   const f = recordingFetch(okToken);
@@ -80,6 +88,74 @@ test("sanitizes_provider_errors", async () => {
       return true;
     },
   );
+});
+
+test("exposes_only_allowlisted_google_error_enums_and_field_paths", async () => {
+  const body = {
+    error: {
+      status: "INVALID_ARGUMENT",
+      message: `API key ${KEY} not valid`,
+      details: [
+        { reason: "API_KEY_INVALID", note: KEY },
+        { fieldViolations: [{ field: "live_connect_constraints.config.system_instruction", description: KEY }] },
+      ],
+    },
+  };
+  const f = recordingFetch(() => new Response(JSON.stringify(body), { status: 400 }));
+  await assert.rejects(
+    createGeminiEphemeralToken({ apiKey: KEY, fetcher: f.fetch, now: NOW }),
+    (e: unknown) => {
+      assert.ok(e instanceof GeminiTokenError);
+      assert.equal(e.upstreamStatus, 400);
+      assert.equal(e.upstreamCode, "INVALID_ARGUMENT");
+      assert.equal(e.upstreamReason, "API_KEY_INVALID");
+      assert.equal(e.upstreamField, "live_connect_constraints.config.system_instruction");
+      assert.equal(JSON.stringify(e).includes(KEY) || e.message.includes(KEY), false);
+      return true;
+    },
+  );
+});
+
+test("keeps_short_google_validation_text_but_never_a_key", async () => {
+  const mk = (description: string) =>
+    recordingFetch(() => new Response(JSON.stringify({ error: { status: "INVALID_ARGUMENT", details: [{ fieldViolations: [{ field: "auth_token", description }] }] } }), { status: 400 }));
+  const ok = mk("Unknown name \"foo\" at 'auth_token': Cannot find field.");
+  await assert.rejects(createGeminiEphemeralToken({ apiKey: KEY, fetcher: ok.fetch, now: NOW }), (e: unknown) => {
+    assert.ok(e instanceof GeminiTokenError);
+    assert.equal(e.upstreamDetail, "Unknown name \"foo\" at 'auth_token': Cannot find field.");
+    return true;
+  });
+  for (const bad of [`echo ${KEY}`, "x".repeat(300), "AIzaSyABCDEFGHIJKLMNOP leaked"]) {
+    const f = mk(bad);
+    await assert.rejects(createGeminiEphemeralToken({ apiKey: KEY, fetcher: f.fetch, now: NOW }), (e: unknown) => {
+      assert.ok(e instanceof GeminiTokenError);
+      assert.equal(e.upstreamDetail, undefined);
+      return true;
+    });
+  }
+});
+
+test("drops_unlisted_enums_and_unsafe_field_paths", async () => {
+  const body = { error: { status: `LEAK ${KEY}`, details: [{ reason: KEY, fieldViolations: [{ field: `x ${KEY}` }] }] } };
+  const f = recordingFetch(() => new Response(JSON.stringify(body), { status: 400 }));
+  await assert.rejects(
+    createGeminiEphemeralToken({ apiKey: KEY, fetcher: f.fetch, now: NOW }),
+    (e: unknown) => {
+      assert.ok(e instanceof GeminiTokenError);
+      assert.equal(e.upstreamCode, undefined);
+      assert.equal(e.upstreamReason, undefined);
+      assert.equal(e.upstreamField, undefined);
+      return true;
+    },
+  );
+});
+
+test("uses_google_documented_timestamp_format_without_milliseconds", async () => {
+  const f = recordingFetch(okToken);
+  await createGeminiEphemeralToken({ apiKey: KEY, fetcher: f.fetch, now: NOW });
+  const body = JSON.parse(String(f.calls[0].init.body));
+  assert.match(body.expireTime, /^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ$/);
+  assert.match(body.newSessionExpireTime, /^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ$/);
 });
 
 test("sanitizes_network_failures", async () => {

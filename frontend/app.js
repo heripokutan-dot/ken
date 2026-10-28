@@ -1,5 +1,6 @@
 import { pcm16ToFloat } from "./pcm-utils.js";
-import { userFacingError, tokenErrorMessage } from "./error-messages.js";
+import { userFacingError, tokenErrorMessage, closeDetail } from "./error-messages.js";
+import { buildSetupMessage, messageDataToText } from "./live-setup.js";
 
 const statusElement = document.querySelector("#status");
 const statusText = document.querySelector("#status-text");
@@ -15,6 +16,7 @@ const SYSTEM_INSTRUCTION =
   "簡潔で親しみやすく、相手の発話に直接答えてください。";
 const AUDIO_SAMPLE_RATE = 24000;
 const INPUT_MIME_TYPE = "audio/pcm;rate=16000";
+const GOOGLE_SCRIPT_TIMEOUT_MS = 10000;
 
 let lifecycle = 0;
 let isStarting = false;
@@ -241,13 +243,15 @@ async function failSession(message) {
   updateControls();
 }
 
+let lastCloseDetail = "";
+
 async function handleUnexpectedClose() {
   if (!isStarting && !isConnected) return;
   lifecycle += 1;
   isStarting = false;
   isConnected = false;
   await releaseAudioResources({ closeSocket: false });
-  showError("Gemini Live との接続が切れました。「会話を開始」から再接続してください。");
+  showError(`Gemini Live との接続が切れました。「会話を開始」から再接続してください。${lastCloseDetail ? `（${lastCloseDetail}）` : ""}`);
   setStatus("接続が切断されました", "error");
   updateControls();
 }
@@ -265,34 +269,34 @@ function connectWebSocket(token, model, websocketBaseUrl, runId) {
         activeSocket.close();
         return;
       }
-      const setup = {
-        setup: {
-          model: `models/${model}`,
-          responseModalities: ["AUDIO"],
-          inputAudioTranscription: {},
-          outputAudioTranscription: {},
-          systemInstruction: { parts: [{ text: SYSTEM_INSTRUCTION }] },
-        },
-      };
+      const setup = buildSetupMessage(model, SYSTEM_INSTRUCTION);
       activeSocket.send(JSON.stringify(setup));
     });
 
+    // Messages are decoded asynchronously (binary frames), so process them strictly in arrival order.
+    let messageChain = Promise.resolve();
     activeSocket.addEventListener("message", (event) => {
-      try {
-        if (typeof event.data !== "string") throw new Error("Unexpected message type");
-        const message = JSON.parse(event.data);
-        if (message.setupComplete && !setupFinished) {
-          setupFinished = true;
-          resolve();
+      messageChain = messageChain.then(async () => {
+        let stage = "decode";
+        try {
+          const text = await messageDataToText(event.data);
+          stage = "parse";
+          const message = JSON.parse(text);
+          stage = "handle";
+          if (message.setupComplete && !setupFinished) {
+            setupFinished = true;
+            resolve();
+          }
+          handleServerMessage(message);
+        } catch {
+          const label = { decode: "受信形式", parse: "JSON 解析", handle: "メッセージ処理" }[stage];
+          if (!setupFinished) {
+            reject(new Error(`Gemini Live から正しい応答を受信できませんでした。（${label}）`));
+          } else {
+            void failSession(`Gemini Live から不正な応答を受信したため、接続を終了しました。（${label}）`);
+          }
         }
-        handleServerMessage(message);
-      } catch {
-        if (!setupFinished) {
-          reject(new Error("Gemini Live から正しい応答を受信できませんでした。"));
-        } else {
-          void failSession("Gemini Live から不正な応答を受信したため、接続を終了しました。");
-        }
-      }
+      });
     });
 
     activeSocket.addEventListener("error", () => {
@@ -303,9 +307,10 @@ function connectWebSocket(token, model, websocketBaseUrl, runId) {
       }
     });
 
-    activeSocket.addEventListener("close", () => {
+    activeSocket.addEventListener("close", (closeEvent) => {
+      lastCloseDetail = closeDetail(closeEvent?.code, closeEvent?.reason);
       if (!setupFinished) {
-        reject(new Error("Gemini Live の接続がセットアップ完了前に終了しました。"));
+        reject(new Error(`Gemini Live の接続がセットアップ完了前に終了しました。${lastCloseDetail ? `（${lastCloseDetail}）` : ""}`));
       }
       if (socket === activeSocket) {
         socket = null;
@@ -361,7 +366,9 @@ async function startSession() {
         idToken = null;
         updateControls();
       }
-      throw new Error(tokenErrorMessage(tokenResponse.status));
+      const errorBody = await tokenResponse.json().catch(() => null);
+      const errorCode = typeof errorBody?.error === "string" ? errorBody.error : undefined;
+      throw new Error(tokenErrorMessage(tokenResponse.status, errorCode, errorBody));
     }
     const tokenData = await tokenResponse.json().catch(() => {
       throw new Error(tokenErrorMessage(401));
@@ -374,7 +381,7 @@ async function startSession() {
     await connectWebSocket(tokenData.token, tokenData.model, tokenData.websocket_url, runId);
     if (runId !== lifecycle) return;
 
-    await audioContext.audioWorklet.addModule("/static/pcm-worklet.js");
+    await audioContext.audioWorklet.addModule("/pcm-worklet.js");
     if (runId !== lifecycle) return;
 
     microphoneSource = audioContext.createMediaStreamSource(microphoneStream);
@@ -441,7 +448,14 @@ async function initSignIn() {
   let config;
   try {
     const res = await fetch("/api/auth-config", { cache: "no-store", credentials: "same-origin" });
-    if (!res.ok) return; // local prototype or Access-protected deployment: no in-page sign-in
+    if (!res.ok) {
+      showError(
+        res.status === 404
+          ? "Googleログインの設定がサーバーにありません。Cloudflare Pages の環境変数 AUTH_PROVIDER と GOOGLE_CLIENT_ID を確認してください。"
+          : `Googleログイン設定を取得できませんでした（HTTP ${res.status}）。Cloudflare Pages の設定とアクセス制御を確認してください。`,
+      );
+      return;
+    }
     config = await res.json();
   } catch {
     return;
@@ -465,9 +479,30 @@ async function initSignIn() {
       cancel_on_tap_outside: true,
     });
     window.google.accounts.id.renderButton(container, { theme: "outline", size: "large", text: "signin_with", locale: "ja" });
+    clearError();
   };
-  if (window.google?.accounts?.id) attachButton();
-  else window.addEventListener("load", attachButton, { once: true });
+
+  // The module may finish its config fetch after the window load event has fired.
+  // Waiting for the script itself avoids registering a load listener too late.
+  if (window.google?.accounts?.id) {
+    attachButton();
+  } else {
+    const googleScript = document.querySelector('script[src*="accounts.google.com/gsi/client"]');
+    if (!googleScript) {
+      showError("Google サインインのスクリプトが見つかりません。");
+      return;
+    }
+    const onLoadFailure = () => {
+      showError("Google サインインを読み込めませんでした。通信設定を確認してください。");
+    };
+    googleScript.addEventListener("load", attachButton, { once: true });
+    googleScript.addEventListener("error", onLoadFailure, { once: true });
+    // If the script failed before the listeners above were attached, no event fires at all.
+    // Check after a deadline so the user is never left with a silent, empty sign-in area.
+    setTimeout(() => {
+      if (!window.google?.accounts?.id) onLoadFailure();
+    }, GOOGLE_SCRIPT_TIMEOUT_MS);
+  }
 }
 
 startButton.addEventListener("click", () => void startSession());
