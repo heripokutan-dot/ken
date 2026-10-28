@@ -1,6 +1,6 @@
 # Gemini Live iPhone App — Cloudflare Setup Guide (operator checklist)
 
-> **Status:** Checklist only. The implementation has not performed any of these steps. Each Cloudflare account change, secret entry, and deployment requires explicit user authorization.
+> **Status:** The hosted app is deployed and verified end to end (sign-in, token, voice session on desktop and iPhone Safari) as of 2026-10-28. See [project-status.md](../../project-status.md) for the current setup and the pitfalls found. Each Cloudflare account change, secret entry, and deployment still requires explicit user authorization.
 
 This guide describes how the hosted app is configured. It does not use Cloudflare Zero Trust (Access). The official Cloudflare One setup documentation says onboarding asks for payment details even when the Zero Trust Free plan is chosen (it states you will not be charged). Whether that applies to your account or screen has not been verified here. The local FastAPI prototype (`server.py`) is a separate path and is not affected.
 
@@ -24,7 +24,7 @@ The operator does **not** want to register a payment card. Rule: if any step ask
 | `AUTH_PROVIDER` = `google` | Pages variable or Secret, per environment | 503 `service_misconfigured` |
 | `GOOGLE_CLIENT_ID` | Pages variable or Secret, per environment | 503 `service_misconfigured` |
 | `ALLOWED_EMAIL` | Pages **Secret** | 503 `service_misconfigured` |
-| `RATE_LIMIT_DB` | Pages **D1 database binding** (dashboard) | 503 `rate_limit_unavailable` |
+| `RATE_LIMIT_DB` | Pages **D1 database binding** (dashboard; the same database for Production and Preview is fine) | 503 `rate_limit_unavailable` |
 
 Secrets are used for the email and client ID so that personal data does not enter the repository. The Google client ID is public, but keeping it out of Git is simpler.
 
@@ -89,6 +89,15 @@ Use the on-page message to narrow down the cause before changing anything.
 > **Unverified:** whether creating a D1 database on your account requires payment details, and whether it is included in the free plan for your account. Check the dashboard before creating anything. If payment details are requested, stop and report it; do not add a card.
 >
 > The Rate Limiting binding is intentionally not used: it is not in the list of supported Pages Functions bindings (Cloudflare docs, Pages Functions bindings page).
+
+## 4a. Known pitfalls (found during the first real deployment)
+
+- **No Wrangler file.** Do not add `wrangler.toml` / `wrangler.jsonc` (see the note under section 0).
+- **Ephemeral token REST body.** Google's documentation example uses `liveConnectConstraints`, but the API answers HTTP 400 (`Unknown name "liveConnectConstraints" at 'auth_token'`). Use `bidiGenerateContentSetup` and timestamps without milliseconds.
+- **Live setup message.** `responseModalities` goes inside `generationConfig` (otherwise the socket closes with code 1007).
+- **Binary frames.** Gemini Live sends JSON as binary (Blob) frames; decode them before parsing.
+- **Origins.** Register each origin you open the app from (for example `https://ken-chl.pages.dev`). Per-deployment hash URLs cannot be registered usefully.
+- **Branch alias URLs.** A branch alias can keep pointing at an old Preview after the production branch changes. Verify on the production URL.
 
 ## 5. Deploy (requires explicit authorization)
 
