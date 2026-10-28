@@ -1,6 +1,6 @@
 import { pcm16ToFloat } from "./pcm-utils.js";
 import { userFacingError, tokenErrorMessage, closeDetail } from "./error-messages.js";
-import { buildSetupMessage } from "./live-setup.js";
+import { buildSetupMessage, messageDataToText } from "./live-setup.js";
 
 const statusElement = document.querySelector("#status");
 const statusText = document.querySelector("#status-text");
@@ -273,22 +273,30 @@ function connectWebSocket(token, model, websocketBaseUrl, runId) {
       activeSocket.send(JSON.stringify(setup));
     });
 
+    // Messages are decoded asynchronously (binary frames), so process them strictly in arrival order.
+    let messageChain = Promise.resolve();
     activeSocket.addEventListener("message", (event) => {
-      try {
-        if (typeof event.data !== "string") throw new Error("Unexpected message type");
-        const message = JSON.parse(event.data);
-        if (message.setupComplete && !setupFinished) {
-          setupFinished = true;
-          resolve();
+      messageChain = messageChain.then(async () => {
+        let stage = "decode";
+        try {
+          const text = await messageDataToText(event.data);
+          stage = "parse";
+          const message = JSON.parse(text);
+          stage = "handle";
+          if (message.setupComplete && !setupFinished) {
+            setupFinished = true;
+            resolve();
+          }
+          handleServerMessage(message);
+        } catch {
+          const label = { decode: "受信形式", parse: "JSON 解析", handle: "メッセージ処理" }[stage];
+          if (!setupFinished) {
+            reject(new Error(`Gemini Live から正しい応答を受信できませんでした。（${label}）`));
+          } else {
+            void failSession(`Gemini Live から不正な応答を受信したため、接続を終了しました。（${label}）`);
+          }
         }
-        handleServerMessage(message);
-      } catch {
-        if (!setupFinished) {
-          reject(new Error("Gemini Live から正しい応答を受信できませんでした。"));
-        } else {
-          void failSession("Gemini Live から不正な応答を受信したため、接続を終了しました。");
-        }
-      }
+      });
     });
 
     activeSocket.addEventListener("error", () => {

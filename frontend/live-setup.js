@@ -12,3 +12,13 @@ export function buildSetupMessage(model, systemInstruction) {
     },
   };
 }
+
+// Gemini Live delivers JSON as text frames or as binary frames (Blob / ArrayBuffer in browsers).
+// Returns the JSON text, or throws if the payload is not something that can be read as text.
+export async function messageDataToText(data) {
+  if (typeof data === "string") return data;
+  if (typeof Blob !== "undefined" && data instanceof Blob) return data.text();
+  if (data instanceof ArrayBuffer) return new TextDecoder("utf-8", { fatal: true }).decode(data);
+  if (ArrayBuffer.isView(data)) return new TextDecoder("utf-8", { fatal: true }).decode(data);
+  throw new Error("unsupported_message_type");
+}
