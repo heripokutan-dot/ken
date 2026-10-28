@@ -99,14 +99,11 @@ export async function createGeminiEphemeralToken(input: {
     uses: 1,
     expireTime: plusMinutes(30),
     newSessionExpireTime: plusMinutes(1),
-    liveConnectConstraints: {
+    // The REST auth_tokens resource has no "liveConnectConstraints" field (Google answered 400: Unknown name
+    // "liveConnectConstraints" at 'auth_token'); its constraints live in bidiGenerateContentSetup, which mirrors the
+    // WebSocket setup message. Only the model is locked here; the browser's setup supplies the rest.
+    bidiGenerateContentSetup: {
       model: `models/${MODEL_ID}`,
-      // Only fields Google documents for REST token constraints. The auth_tokens API answered
-      // 400 INVALID_ARGUMENT (field auth_token) when transcription and systemInstruction were included;
-      // the browser supplies those in its own setup message.
-      config: {
-        responseModalities: ["AUDIO"],
-      },
     },
   };
 

@@ -22,9 +22,7 @@ Sources:
   - `uses: 1`
   - `expire_time`: UTC datetime, 30 minutes after issuance
   - `new_session_expire_time`: UTC datetime, 1 minute after issuance
-  - `live_connect_constraints.model: "gemini-3.8-live"`
-  - `live_connect_constraints.config.response_modalities: ["AUDIO"]`
-  - Verified against the live API (2026-10-28): adding transcription settings or `systemInstruction` to the REST token constraints is rejected with HTTP 400 `INVALID_ARGUMENT` (field `auth_token`), so the token locks only the model and `responseModalities`; the browser's setup message supplies transcription and the Japanese system instruction.
+  - Verified against the live REST API (2026-10-28): the documentation's REST example uses `liveConnectConstraints`, but the API answers HTTP 400 `Unknown name "liveConnectConstraints" at 'auth_token'`. The REST body therefore uses `bidiGenerateContentSetup` (same shape as the WebSocket `setup`): `{ "uses": 1, "expireTime": ..., "newSessionExpireTime": ..., "bidiGenerateContentSetup": { "model": "models/gemini-3.8-live" } }`. Only the model is locked; transcription, modalities and the Japanese system instruction come from the browser setup message. (SDK snake_case keys like `live_connect_constraints` are SDK-level and are not sent as-is.)
 - The endpoint response exposes only the ephemeral token, model ID, and constrained WebSocket base URL. It sets `Cache-Control: no-store`; it does not return the long-lived API key.
 
 Source:

@@ -31,17 +31,17 @@ test("locks_model_and_single_use", async () => {
   await createGeminiEphemeralToken({ apiKey: KEY, fetcher: f.fetch, now: NOW });
   const body = JSON.parse(String(f.calls[0].init.body));
   assert.equal(body.uses, 1);
-  assert.equal(body.liveConnectConstraints.model, `models/${MODEL_ID}`);
+  assert.equal(body.bidiGenerateContentSetup.model, `models/${MODEL_ID}`);
   assert.equal(MODEL_ID, "gemini-3.8-live");
 });
 
-test("token_constraints_use_only_documented_rest_fields", async () => {
+test("token_body_uses_the_rest_field_names_google_accepts", async () => {
   const f = recordingFetch(okToken);
   await createGeminiEphemeralToken({ apiKey: KEY, fetcher: f.fetch, now: NOW });
   const body = JSON.parse(String(f.calls[0].init.body));
-  assert.deepEqual(Object.keys(body).sort(), ["expireTime", "liveConnectConstraints", "newSessionExpireTime", "uses"]);
-  assert.deepEqual(Object.keys(body.liveConnectConstraints).sort(), ["config", "model"]);
-  assert.deepEqual(body.liveConnectConstraints.config, { responseModalities: ["AUDIO"] });
+  assert.deepEqual(Object.keys(body).sort(), ["bidiGenerateContentSetup", "expireTime", "newSessionExpireTime", "uses"]);
+  assert.equal("liveConnectConstraints" in body, false, "Google rejects liveConnectConstraints on the REST resource");
+  assert.deepEqual(body.bidiGenerateContentSetup, { model: `models/${MODEL_ID}` });
 });
 
 test("sets_short_session_start_window", async () => {
@@ -50,8 +50,7 @@ test("sets_short_session_start_window", async () => {
   const body = JSON.parse(String(f.calls[0].init.body));
   assert.equal(body.newSessionExpireTime, "2026-10-27T00:01:00Z");
   assert.equal(body.expireTime, "2026-10-27T00:30:00Z");
-  assert.deepEqual(body.liveConnectConstraints.config.responseModalities, ["AUDIO"]);
-});
+  });
 
 test("returns_expected_token_shape", async () => {
   const f = recordingFetch(okToken);
