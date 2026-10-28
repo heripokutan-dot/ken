@@ -24,7 +24,7 @@ Sources:
   - `new_session_expire_time`: UTC datetime, 1 minute after issuance
   - `live_connect_constraints.model: "gemini-3.8-live"`
   - `live_connect_constraints.config.response_modalities: ["AUDIO"]`
-  - Audio transcription settings and the Japanese system instruction are also constrained.
+  - Verified against the live API (2026-10-28): adding transcription settings or `systemInstruction` to the REST token constraints is rejected with HTTP 400 `INVALID_ARGUMENT` (field `auth_token`), so the token locks only the model and `responseModalities`; the browser's setup message supplies transcription and the Japanese system instruction.
 - The endpoint response exposes only the ephemeral token, model ID, and constrained WebSocket base URL. It sets `Cache-Control: no-store`; it does not return the long-lived API key.
 
 Source:

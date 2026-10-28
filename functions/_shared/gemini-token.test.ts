@@ -35,6 +35,15 @@ test("locks_model_and_single_use", async () => {
   assert.equal(MODEL_ID, "gemini-3.8-live");
 });
 
+test("token_constraints_use_only_documented_rest_fields", async () => {
+  const f = recordingFetch(okToken);
+  await createGeminiEphemeralToken({ apiKey: KEY, fetcher: f.fetch, now: NOW });
+  const body = JSON.parse(String(f.calls[0].init.body));
+  assert.deepEqual(Object.keys(body).sort(), ["expireTime", "liveConnectConstraints", "newSessionExpireTime", "uses"]);
+  assert.deepEqual(Object.keys(body.liveConnectConstraints).sort(), ["config", "model"]);
+  assert.deepEqual(body.liveConnectConstraints.config, { responseModalities: ["AUDIO"] });
+});
+
 test("sets_short_session_start_window", async () => {
   const f = recordingFetch(okToken);
   await createGeminiEphemeralToken({ apiKey: KEY, fetcher: f.fetch, now: NOW });

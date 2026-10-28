@@ -7,9 +7,6 @@ export const WEBSOCKET_URL =
   "google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContentConstrained";
 const AUTH_TOKENS_URL = "https://generativelanguage.googleapis.com/v1beta/auth_tokens";
 
-const SYSTEM_INSTRUCTION =
-  "あなたは日本語で自然に会話する音声アシスタントです。簡潔で親しみやすく、相手の発話に直接答えてください。";
-
 export class GeminiTokenError extends Error {
   readonly status: number;
   // HTTP status Google answered with (a bare number, never any response text), when there was an answer.
@@ -87,11 +84,11 @@ export async function createGeminiEphemeralToken(input: {
     newSessionExpireTime: plusMinutes(1),
     liveConnectConstraints: {
       model: `models/${MODEL_ID}`,
+      // Only fields Google documents for REST token constraints. The auth_tokens API answered
+      // 400 INVALID_ARGUMENT (field auth_token) when transcription and systemInstruction were included;
+      // the browser supplies those in its own setup message.
       config: {
         responseModalities: ["AUDIO"],
-        inputAudioTranscription: {},
-        outputAudioTranscription: {},
-        systemInstruction: { parts: [{ text: SYSTEM_INSTRUCTION }] },
       },
     },
   };
