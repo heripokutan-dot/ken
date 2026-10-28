@@ -1,5 +1,6 @@
 import { pcm16ToFloat } from "./pcm-utils.js";
 import { userFacingError, tokenErrorMessage, closeDetail } from "./error-messages.js";
+import { buildSetupMessage } from "./live-setup.js";
 
 const statusElement = document.querySelector("#status");
 const statusText = document.querySelector("#status-text");
@@ -268,15 +269,7 @@ function connectWebSocket(token, model, websocketBaseUrl, runId) {
         activeSocket.close();
         return;
       }
-      const setup = {
-        setup: {
-          model: `models/${model}`,
-          responseModalities: ["AUDIO"],
-          inputAudioTranscription: {},
-          outputAudioTranscription: {},
-          systemInstruction: { parts: [{ text: SYSTEM_INSTRUCTION }] },
-        },
-      };
+      const setup = buildSetupMessage(model, SYSTEM_INSTRUCTION);
       activeSocket.send(JSON.stringify(setup));
     });
 
