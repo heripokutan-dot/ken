@@ -2,6 +2,7 @@ import { pcm16ToFloat } from "./pcm-utils.js";
 import { userFacingError, tokenErrorMessage, closeDetail } from "./error-messages.js";
 import { buildSetupMessage, messageDataToText } from "./live-setup.js";
 import { createTranscriptRecorder } from "./transcript-recorder.js";
+import { createNoteSaver, postNote } from "./notes-client.js";
 
 const statusElement = document.querySelector("#status");
 const statusText = document.querySelector("#status-text");
@@ -11,6 +12,13 @@ const outputTranscriptElement = document.querySelector("#output-transcript");
 const startButton = document.querySelector("#start-button");
 const interruptButton = document.querySelector("#interrupt-button");
 const stopButton = document.querySelector("#stop-button");
+const historyNoteElement = document.querySelector("#history-note");
+const autoSaveRow = document.querySelector("#autosave-row");
+const autoSaveSwitch = document.querySelector("#autosave-switch");
+const noteSaveBox = document.querySelector("#note-save-box");
+const noteSaveMessage = document.querySelector("#note-save-message");
+const noteSaveRetry = document.querySelector("#note-save-retry");
+const noteSaveHint = document.querySelector("#note-save-hint");
 
 const SYSTEM_INSTRUCTION =
   "あなたは日本語で自然に会話する音声アシスタントです。" +
@@ -18,6 +26,8 @@ const SYSTEM_INSTRUCTION =
 const AUDIO_SAMPLE_RATE = 24000;
 const INPUT_MIME_TYPE = "audio/pcm;rate=16000";
 const GOOGLE_SCRIPT_TIMEOUT_MS = 10000;
+const AUTO_SAVE_KEY = "ken.autoSaveNotes";
+const HOSTED_HISTORY_NOTE = "音声は保存されません。「自動保存」がオンのとき、会話の文字起こしが、メモとして保存されます（あなただけが見られます）。";
 
 let lifecycle = 0;
 let isStarting = false;
@@ -39,6 +49,9 @@ const transcriptRecorder = createTranscriptRecorder();
 let authRequired = false;
 let authClientId = null;
 let idToken = null;
+let conversationActive = false;
+// Saving a finished conversation as a note. It reads the ID token at the moment of each request.
+const noteSaver = createNoteSaver({ send: (note) => postNote(note, { idToken }), onChange: renderNoteSave });
 
 function setStatus(message, state) {
   statusText.textContent = message;
@@ -234,6 +247,7 @@ async function stopSession() {
   clearError();
   setStatus("未接続", "idle");
   updateControls();
+  saveEndedConversation();
 }
 
 async function failSession(message) {
@@ -245,6 +259,7 @@ async function failSession(message) {
   showError(message);
   setStatus("エラー", "error");
   updateControls();
+  saveEndedConversation();
 }
 
 let lastCloseDetail = "";
@@ -258,6 +273,7 @@ async function handleUnexpectedClose() {
   showError(`Gemini Live との接続が切れました。「会話を開始」から再接続してください。${lastCloseDetail ? `（${lastCloseDetail}）` : ""}`);
   setStatus("接続が切断されました", "error");
   updateControls();
+  saveEndedConversation();
 }
 
 function connectWebSocket(token, model, websocketBaseUrl, runId) {
@@ -331,6 +347,7 @@ async function startSession() {
   clearError();
   resetTranscripts();
   transcriptRecorder.reset();
+  noteSaver.reset();
   setStatus("接続中…", "connecting");
   updateControls();
 
@@ -418,6 +435,7 @@ async function startSession() {
     if (runId !== lifecycle) return;
 
     isConnected = true;
+    conversationActive = true;
     isStarting = false;
     setStatus("会話中", "connected");
     updateControls();
@@ -432,6 +450,49 @@ async function startSession() {
       isStarting = false;
       updateControls();
     }
+  }
+}
+
+function renderNoteSave(view) {
+  noteSaveBox.hidden = !view.visible;
+  noteSaveMessage.textContent = view.message;
+  noteSaveRetry.hidden = !view.showRetry;
+  noteSaveRetry.disabled = view.retryDisabled;
+  noteSaveHint.hidden = !view.hint;
+  noteSaveHint.textContent = view.hint;
+}
+
+function readAutoSaveSetting() {
+  try {
+    return localStorage.getItem(AUTO_SAVE_KEY) !== "false";
+  } catch {
+    return true;
+  }
+}
+
+function writeAutoSaveSetting(value) {
+  try {
+    localStorage.setItem(AUTO_SAVE_KEY, value ? "true" : "false");
+  } catch {
+    // Without storage the switch still works for this page view.
+  }
+}
+
+function showAutoSaveControls() {
+  autoSaveRow.hidden = false;
+  historyNoteElement.textContent = HOSTED_HISTORY_NOTE;
+}
+
+// Called after the clean-up of a conversation that was really running. Never waits and never throws,
+// so the end-of-conversation code that calls it behaves as before whatever happens here.
+function saveEndedConversation() {
+  if (!conversationActive) return;
+  conversationActive = false;
+  try {
+    if (!authRequired || !autoSaveSwitch.checked) return;
+    void noteSaver.submit(transcriptRecorder.take());
+  } catch {
+    // Saving is best effort.
   }
 }
 
@@ -469,6 +530,7 @@ async function initSignIn() {
 
   authRequired = true;
   authClientId = config.clientId;
+  showAutoSaveControls();
   updateControls();
 
   const container = document.querySelector("#google-signin");
@@ -513,6 +575,9 @@ async function initSignIn() {
 startButton.addEventListener("click", () => void startSession());
 interruptButton.addEventListener("click", interruptPlayback);
 stopButton.addEventListener("click", () => void stopSession());
+autoSaveSwitch.addEventListener("change", () => writeAutoSaveSetting(autoSaveSwitch.checked));
+noteSaveRetry.addEventListener("click", () => void noteSaver.retry());
+autoSaveSwitch.checked = readAutoSaveSetting();
 
 setStatus("未接続", "idle");
 updateControls();

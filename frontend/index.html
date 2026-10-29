@@ -14,7 +14,7 @@
       <header class="page-header">
         <p class="eyebrow">PERSONAL VOICE ASSISTANT</p>
         <h1>Gemini Live 音声会話</h1>
-        <p class="intro">マイクに向かって話しかけると、Gemini が音声で返答します。音声や会話履歴はこのアプリには保存されません。</p>
+        <p class="intro">マイクに向かって話しかけると、Gemini が音声で返答します。<span id="history-note">音声や会話履歴はこのアプリには保存されません。</span></p>
       </header>
 
       <section class="signin-panel" aria-labelledby="signin-heading">
@@ -43,6 +43,22 @@
           <button id="stop-button" class="button button-quiet" type="button" disabled>終了</button>
         </div>
         <p class="help-text">開始するとマイクの使用許可を求めます。「音声を中断」はブラウザーでの再生を止めます。終了するとマイクと接続を停止します。</p>
+
+        <div id="autosave-row" class="autosave-row" hidden>
+          <label class="switch">
+            <input id="autosave-switch" type="checkbox" checked>
+            <span>会話をメモとして自動保存</span>
+          </label>
+          <p class="help-text">オンのとき、会話が終わると（終了・エラー・切断）、文字起こしがメモとして保存されます。音声は保存されません。</p>
+        </div>
+
+        <div id="note-save" class="note-save" role="status" aria-live="polite">
+          <div id="note-save-box" class="note-save-box" hidden>
+            <p id="note-save-message" class="note-save-message"></p>
+            <button id="note-save-retry" class="button button-secondary" type="button" hidden>メモをもう一度保存</button>
+            <p id="note-save-hint" class="help-text" hidden>次の会話を始めると、消えます。</p>
+          </div>
+        </div>
       </section>
 
       <section class="transcript-grid" aria-label="会話の文字起こし">

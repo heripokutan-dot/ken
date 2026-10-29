@@ -6,7 +6,7 @@
   "scripts": {
     "typecheck": "tsc -p tsconfig.json",
     "test:functions": "node --test --experimental-strip-types \"functions/**/*.test.ts\"",
-    "test:frontend": "node --test tests/test_error_messages.mjs tests/test_pcm_utils.mjs tests/test_live_setup.mjs tests/test_transcript_recorder.mjs",
+    "test:frontend": "node --test tests/test_error_messages.mjs tests/test_pcm_utils.mjs tests/test_live_setup.mjs tests/test_transcript_recorder.mjs tests/test_notes_client.mjs",
     "test": "npm run typecheck && npm run test:functions && npm run test:frontend"
   },
   "devDependencies": {
