@@ -1,6 +1,7 @@
 import { pcm16ToFloat } from "./pcm-utils.js";
 import { userFacingError, tokenErrorMessage, closeDetail } from "./error-messages.js";
 import { buildSetupMessage, messageDataToText } from "./live-setup.js";
+import { createTranscriptRecorder } from "./transcript-recorder.js";
 
 const statusElement = document.querySelector("#status");
 const statusText = document.querySelector("#status-text");
@@ -33,6 +34,7 @@ let suppressPlayback = false;
 let committedInputTranscript = "";
 let interimInputTranscript = "";
 let outputTranscript = "";
+const transcriptRecorder = createTranscriptRecorder();
 // Hosted (Google sign-in) mode: the ID token lives only in memory, never in storage.
 let authRequired = false;
 let authClientId = null;
@@ -146,6 +148,7 @@ function handleServerMessage(message) {
     committedInputTranscript = appendTranscript(committedInputTranscript, content.inputTranscription.text);
     interimInputTranscript = "";
     renderInputTranscript();
+    transcriptRecorder.add("user", content.inputTranscription.text);
   }
 
   if (content.interimInputTranscription?.text) {
@@ -156,6 +159,7 @@ function handleServerMessage(message) {
   if (content.outputTranscription?.text) {
     outputTranscript = appendTranscript(outputTranscript, content.outputTranscription.text);
     outputTranscriptElement.textContent = outputTranscript;
+    transcriptRecorder.add("ai", content.outputTranscription.text);
   }
 
   for (const part of content.modelTurn?.parts ?? []) {
@@ -326,6 +330,7 @@ async function startSession() {
   isStarting = true;
   clearError();
   resetTranscripts();
+  transcriptRecorder.reset();
   setStatus("接続中…", "connecting");
   updateControls();
 
