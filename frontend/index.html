@@ -78,8 +78,55 @@
         </article>
       </section>
 
+      <section id="notes-panel" class="notes-panel" aria-labelledby="notes-heading" hidden>
+        <div class="notes-head">
+          <div>
+            <p class="section-label">NOTES</p>
+            <h2 id="notes-heading">メモ</h2>
+          </div>
+          <button id="notes-toggle" class="button button-secondary" type="button" aria-expanded="false" aria-controls="notes-body">メモを開く</button>
+        </div>
+
+        <div id="notes-body" class="notes-body" hidden>
+          <div id="notes-status" class="notes-status" role="status" aria-live="polite">
+            <p id="notes-status-message" class="notes-status-message" hidden></p>
+            <div id="notes-status-actions" class="notes-actions" hidden>
+              <button id="notes-retry" class="button button-secondary" type="button" hidden>もう一度試す</button>
+              <button id="notes-status-refresh" class="button button-secondary" type="button" hidden>一覧を更新</button>
+            </div>
+          </div>
+          <p id="notes-busy" class="help-text" hidden></p>
+
+          <div id="notes-confirm" class="notes-confirm" role="group" aria-labelledby="notes-confirm-text" hidden>
+            <p id="notes-confirm-text" class="notes-confirm-text"></p>
+            <div class="notes-actions">
+              <button id="notes-confirm-yes" class="button button-danger" type="button">削除する</button>
+              <button id="notes-confirm-no" class="button button-secondary" type="button">やめる</button>
+            </div>
+          </div>
+
+          <div id="notes-list-view">
+            <div class="notes-list-head">
+              <p id="notes-count" class="notes-count" hidden></p>
+              <button id="notes-refresh" class="button button-secondary" type="button">更新</button>
+            </div>
+            <p id="notes-empty" class="help-text" hidden></p>
+            <ul id="notes-items" class="notes-items"></ul>
+            <button id="notes-delete-all" class="button button-danger" type="button" hidden>すべてのメモを削除</button>
+          </div>
+
+          <div id="notes-detail-view" hidden>
+            <button id="notes-back" class="button button-secondary" type="button">一覧に戻る</button>
+            <h3 id="notes-detail-title" class="notes-detail-title"></h3>
+            <p id="notes-detail-meta" class="help-text notes-detail-meta"></p>
+            <pre id="notes-detail-body" class="notes-detail-body"></pre>
+            <button id="notes-delete-one" class="button button-danger" type="button">このメモを削除</button>
+          </div>
+        </div>
+      </section>
+
       <footer class="page-footer">
-        <p>ローカル利用向けの試作アプリです。公開サーバーには配置しないでください。</p>
+        <p><span id="footer-note">ローカル利用向けの試作アプリです。公開サーバーには配置しないでください。</span></p>
       </footer>
     </main>
   </body>
