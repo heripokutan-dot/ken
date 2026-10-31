@@ -1,28 +1,46 @@
-# プロジェクトの現状と引き継ぎメモ（2026-10-28）
+# プロジェクトの現状と引き継ぎメモ
 
-Gemini Live と日本語で音声会話する個人用アプリです。パソコンと iPhone の Safari で、本番 URL での動作を確認済みです。秘密情報（API キー、メールアドレス、トークン）はこのリポジトリに入れません。
+Gemini Live と日本語で音声会話する個人用アプリです。パソコンと iPhone の Safari で、本番 URL での動作を確認済みです（利用者の報告）。秘密情報（API キー、メールアドレス、トークン）はこのリポジトリに入れません。このリポジトリは公開です。
 
 ## 構成
 
 | 場所 | 役割 |
 | --- | --- |
-| `frontend/` | 画面（`app.js`、`error-messages.js`、`live-setup.js`、`pcm-*.js`）。Cloudflare Pages が配信します |
+| `frontend/` | 画面（`app.js`、`error-messages.js`、`live-setup.js`、`pcm-*.js`、メモ用の `transcript-recorder.js`・`notes-client.js`・`notes-list-client.js`）。Cloudflare Pages が配信します |
 | `functions/api/auth-config.ts` | `GET /api/auth-config`。Google のクライアント ID だけを返します |
 | `functions/api/live-token.ts` | `POST /api/live-token`。Google ID トークンを検証し、許可された1人だけに Gemini の一時トークンを発行します |
 | `functions/_shared/` | JWT 検証、Google 認証、レート制限（D1）、Gemini トークン発行、HTTP の共通処理 |
-| `functions/api/notes/` | `/api/notes` と `/api/notes/<id>`。会話の文字起こしを、メモとして保存・一覧・取得・削除します。`index.ts` が本体、`[id].ts` が id つきのルートです（本番への反映状況は「状態」の節） |
+| `functions/api/notes/` | `/api/notes` と `/api/notes/<id>`。会話の文字起こしを、メモとして保存・一覧・取得・削除します。`index.ts` が本体、`[id].ts` が id つきのルートです。本番に出ています（「状態」の節） |
 | `migrations/0001_rate_limits.sql` | レート制限用の D1 テーブル |
 | `migrations/0002_notes.sql` | メモ用の D1 テーブル `notes` |
-| `server.py`, `tests/test_*.py` | ローカル試作（FastAPI）。Pages 版とは別の経路です |
+| `server.py`, `tests/test_*.py` | ローカル試作（FastAPI）。Pages 版とは別の経路です。`README.md` の「ローカル試作」の節も、この経路の説明です |
 
-流れ: ブラウザーが Google でサインイン → `/api/live-token` が ID トークン・許可メール・レート制限（1分10回）を確認 → Gemini の一時トークンを返す → ブラウザーが Gemini Live の WebSocket に直接つなぐ。音声は Gemini と直接やり取りし、サーバーには残りません。会話の文字起こしを残すための `/api/notes` を作りましたが、画面からはまだ使えず、本番にもまだありません（「メモ保存」と「状態」の節）。
+流れ: ブラウザーが Google でサインイン → `/api/live-token` が ID トークン・許可メール・レート制限（1分10回）を確認 → Gemini の一時トークンを返す → ブラウザーが Gemini Live の WebSocket に直接つなぐ。音声は Gemini と直接やり取りし、サーバーには残りません。会話の文字起こしは、会話の終了後に、自動保存がオンのとき `/api/notes` に送られ、メモとして D1 に残ります（「メモ保存」の節）。
+
+「ローカル利用向けの試作アプリです。公開サーバーには配置しないでください。」という文は、`frontend/index.html` の脚注の初期値と、`README.md`・`server.py` 側（ローカル試作）の説明に残っています。Google サインインの設定があるとき（本番）は、`app.js` が脚注を「個人用のアプリです。許可された1人だけが使えます。」に差し替えます（コードで確認。本番の画面での表示は未確認）。
 
 ## 本番
 
 - URL: `https://ken-chl.pages.dev`（Cloudflare Pages のプロジェクト `ken`）。
 - 本番ブランチ: `feat/gemini-live-iphone-cloudflare-impl`。ここに push すると本番デプロイが走ります。
 - 作業用ブランチに push すると、本番ではなく Preview が作られます（`feat/notes` で、Cloudflare Pages のチェック結果に Preview の URL とブランチの Preview の URL が出ることを確認しました。本番ブランチの先頭が変わらないことも確認しましたが、Cloudflare の画面は見ていません）。
-- `main` は古いままです（PR #1・#2 のみ）。本番ブランチは `main` より先に進んでいます。`main` に取り込むかどうかは、利用者の判断待ちです。
+- `main` は古いままです（取り込まれた PR は #1・#2 のみ）。本番ブランチは `main` より先に進んでいます。`main` に取り込むかどうかは、利用者の判断待ちです。
+- PR は #1〜#6 がすべてマージ済みです（GitHub の API で確認）。#1・#2 は `main` 向け、#3〜#6 は本番ブランチ向けです。#3 で足した `wrangler.toml` は、のちに取り除かれ（`e0dae89`）、いまは存在しません。
+- `.github/workflows/deploy-pages.yml`（GitHub Pages への配信）が動くのは、`main` への push と手動実行だけです。本番ブランチには影響しません。
+
+### 本番への出し方（利用者が決めた運用）
+
+- 本番ブランチは保護されています。PR が必須で、承認は 1 件必須、管理者にも適用され、強制 push と削除は禁止です（GitHub の API で読み取って確認。必須のステータスチェックは設定されておらず、ルールセットもありません）。
+- PR の作成者は、自分の PR を承認できません。そこで、マージのときだけ、利用者が GitHub の設定で承認の必須数を一時的に外し、マージして、すぐに戻します。この設定の変更は、利用者が行います。
+- 「Review import」（ブランチ保護をルールセットに移す画面）は使いません。押すと、保護が二重になります。
+- マージは利用者が行います。マージの方法は「Create a merge commit」です。マージの瞬間に、Cloudflare Pages の本番のデプロイが走ります。
+- 作業用ブランチへの push は、本番ではなく Preview になります（上記）。
+
+### 戻し方
+
+- Cloudflare の画面で、前のデプロイに戻す（ロールバック）方法があります。この手順は、まだ実際に行ったことがありません（**未確認**）。
+- または、マージコミットを `git revert -m 1 <マージコミット>` で打ち消す PR を作ります。本番ブランチの保護のため、この PR にも承認が要ります。
+- コードを戻しても、D1 の `notes` 表とメモは残ります。メモ機能のコードを戻す前に、メモのパネルで、テスト用のメモを消しておきます。
 
 ## 設定（Cloudflare Pages のダッシュボードで管理）
 
@@ -45,7 +63,16 @@ Gemini Live と日本語で音声会話する個人用アプリです。パソ�
 
 ## メモ保存（`/api/notes`）
 
-会話の文字起こしを、D1 にメモとして残すための API です。画面（保存のスイッチ、メモの一覧）はまだありません。
+会話の文字起こしを、D1 にメモとして残すための API と、それを使う画面です。
+
+### 画面と部品（`frontend/`）
+
+- 記録（`transcript-recorder.js`）: 会話中の「あなた：」「AI：」の発話を、文字起こしとして集めます。画面側では 10,000 文字（ラベルと改行を含む）で切り、送る JSON が大きくなりすぎないようにも切ります。`title` は 30 文字までです。サーバー側の上限（次の「API」の節）とは別に、画面でも切っています。
+- 保存（`notes-client.js`）: 会話が終わったとき（終了、エラー、予期しない切断）に、`/api/notes` へ 1 回送ります。応答を、「保存しました」「ログインの期限が切れました」「操作が多すぎます」などの表示に変えます。再送できる失敗のときだけ、「メモをもう一度保存」のボタンを出し、メモは画面のメモリにだけ保持します（次の会話を始めると消えます）。送信には 15 秒の待ち時間の上限があります。
+- 自動保存のスイッチ: サインイン設定があるときだけ表示されます。初期値はオンで、ブラウザーの `localStorage`（キー `ken.autoSaveNotes`）に覚えます。オフなら保存しません。
+- 開始に失敗した会話は保存しません（会話が成立したときだけ、保存の対象になります）。
+- 一覧と削除（`notes-list-client.js`）: メモのパネルで、一覧（新しい順）、本文の表示、1 件削除、全削除ができます。全削除は確認が必要で、サーバーには `?confirm=delete-all` を付けて送ります。文字はすべて `textContent` で表示し、HTML としては扱いません。
+- ID トークンは、メモリの中だけに置きます（`localStorage` などには書きません）。
 
 ### `notes` 表（`migrations/0002_notes.sql`）
 
@@ -59,7 +86,7 @@ Gemini Live と日本語で音声会話する個人用アプリです。パソ�
 | `truncated` | 0 か 1（それ以外は表の側で拒否）。初期値は 0 |
 
 - 追加だけの SQL です（`CREATE TABLE IF NOT EXISTS`、`CREATE INDEX IF NOT EXISTS`）。`rate_limits` には触れません。何度実行しても安全です。
-- 本番の D1 には、利用者が Cloudflare の画面から手で実行しました。実行後、`notes` と `rate_limits` の表と、`notes` のインデックスがあることを、利用者が確認しました（利用者の報告。私は画面を見ていません）。
+- 本番の D1 には、利用者が Cloudflare の画面から手で実行しました。実行後、`notes` と `rate_limits` の表と、`notes` のインデックスがあることを、利用者が確認しました（利用者の報告。Cloudflare の画面は未確認）。
 - migration を自動で適用する仕組みは、このリポジトリにはありません。`.github/` の3つのワークフロー（`main` への push で GitHub Pages に配信するもの、手動で動かす Gemini の確認2つ）と `package.json` の scripts を調べて、D1・migration・wrangler への言及がないことを確認しました。Cloudflare 側のビルド設定は見ていないので、そちらで自動適用されないことは未確認です。
 - **新しい migration を足したら、利用者が手で実行する必要があります**（Cloudflare の画面の D1 の Console、または `wrangler d1 execute`）。その表を使うコードを本番に出す前に、先に表を足します（追加だけの SQL なら、既存の動作に影響しません）。
 
@@ -126,12 +153,31 @@ Gemini Live と日本語で音声会話する個人用アプリです。パソ�
 
 画面には、原因の手がかりになる診断（足りない設定の名前、Google の種別コード・理由・項目名、WebSocket の終了コード）が出ます。値や API キーは出しません。
 
+## 見つけた不具合と、その扱い
+
+利用者の報告（iPhone Safari。「音声を中断」のあと、終了して開始し直すと、声が出ず文字だけになる。ページを再読み込みすると戻る）をきっかけに調べ、次の 2 つが原因として見つかりました。どちらも、最初の音声の実装（`f2c9a11`）からあり、メモ機能の PR #6 で入ったものではありません（`git log -S` と、旧版・新版の比較で確認）。`fix/playback-reset` の PR で修正しました。
+
+1. 会話のたびに、前の会話の長さだけ、声が遅れる。`startSession` は、時計が 0 から始まる新しい AudioContext を作りますが、次に鳴らす時刻 `nextPlaybackTime` に、前の会話の経過秒数が残っていました（終了のとき、古い AudioContext の時計の値が入る）。「音声を中断」を使わなくても起きます。Chromium の擬似環境（偽の WebSocket とマイク）で、1つ目の会話が 6 秒なら、2つ目の返答が約 6 秒遅れて予約されることを再現しました（修正後は 0.02 秒前後）。
+2. サーバーが突然切れたあと、次の会話の最初の返答が無音になる。「音声を中断」で立てる `suppressPlayback` が、`handleUnexpectedClose` では戻らず、次の会話に残っていました。擬似環境で再現し、修正後は鳴ることを確認しました。
+
+修正は、`startSession` で新しい AudioContext を作る行の直後に、`nextPlaybackTime = 0;` と `suppressPlayback = false;` を足した 2 行です（静的テスト `tests/test_playback_reset_app.mjs` つき）。
+
+**実機（iPhone Safari）での確認は、まだです。** 擬似環境で再現した原因を直したものであり、実機の症状がこれだけで消えるかは未確認です。
+
+iPhone Safari で疑われること（コードを読んだ上での推測で、**未確認**。今回は直していません）:
+
+- `resume()` が、`getUserMedia` の `await` のあとにあり、ボタンを押した操作の直接の続きではない。
+- 会話のたびに AudioContext を作り直している（iOS には数の上限があるとされる）。
+- サイレントスイッチ（消音）の影響。
+
 ## テスト
 
 ```bash
 npm install
 npm test          # 型チェック + functions + フロント
 ```
+
+`fix/playback-reset` の時点の件数は、functions 159、フロント 290（`tests/test_playback_reset_app.mjs` の 4 件を含む）で、すべて通っています。
 
 `tests/test_*.py` は FastAPI が必要で、Pages 版には関係しません。
 
@@ -147,16 +193,16 @@ npm test          # 型チェック + functions + フロント
 - `main` に取り込むかどうか（利用者の判断）。
 - 未マージの独自ブランチ `feat/gemini-live-api-smoke-test`（Python SDK を使った動作確認用のスクリプトとテスト）は残してあります。
 - ID トークンは約1時間で切れます。切れたら再サインインが必要です。
-- メモ保存の画面（自動保存のスイッチ、メモの一覧と削除）は未着手です。
-- `/api/notes` を本番に出すこと（利用者の許可と、本番ブランチへの取り込みが要ります）。
+- 音声の遅れの修正（`fix/playback-reset` の PR）を、実機の iPhone Safari で確かめること。
+- `docs/project-status.md` 以外の文書（`README.md` の見出しなど）に残る「ローカル」の表現を、どう扱うか（利用者の判断待ち）。
 
-## 状態（作業2 完了時点）
+## 状態
 
-- 作業用ブランチ `feat/notes` のコミット: 作業1（`migrations/0002_notes.sql` とそのテスト）が `cd17015`、作業2（`/api/notes` とそのテスト）が `d5d52bd`。
-- 本番ブランチ `feat/gemini-live-iphone-cloudflare-impl` は `a5d7f54` のままです。
-- `/api/notes` は、`feat/notes` のプレビューにだけあります（Cloudflare のビルドが成功したところまで確認。動作は未確認）。本番には出ていません。本番に出すには、利用者の許可と、本番ブランチへの取り込みが要ります。
-- `notes` 表は、本番の D1 にあります（利用者が手で実行。利用者の報告）。本番のコードはまだ使いません。
-- 作業3（画面）は未着手です。
+- 本番ブランチ `feat/gemini-live-iphone-cloudflare-impl` の先頭は、PR #6 のマージコミット `64ca5aa`（親は `a5d7f54` と `1e823b3`）です。メモ機能（記録、保存、一覧、削除）は、この PR で本番に入りました。
+- メモ機能の作業のコミット: 作業1（`migrations/0002_notes.sql`）が `cd17015`、作業2（`/api/notes`）が `d5d52bd`、保存の画面（3-B1）が `cb1468c`、メモのパネル（3-B2）が `1e823b3`。
+- `notes` 表は、本番の D1 にあります（利用者が手で実行。利用者の報告）。
+- `fix/playback-reset` の PR（音声の遅れの修正と、この文書の更新）は、マージされるまで本番に出ません。
+- 本番でのメモ機能の実際の動作（保存、一覧、削除）は、この文書を書いた時点では、利用者の確認の記録をここに持っていません（**未確認**）。
 
 ## 未確認のこと
 
@@ -167,3 +213,9 @@ npm test          # 型チェック + functions + フロント
 - `RATE_LIMIT_DB` の接続先が `ken-rate-limits` であること（「D1 の名前と実態のずれ」の節）。
 - Cloudflare 側のビルド設定で、migration が自動で適用されないこと。D1 に保存した本文の、Cloudflare 側での保存時の扱い。
 - 型チェックの版の差。`tsc` 7.0.2 で確認しましたが、`package.json` は `^6.0.3` です。6.x での結果は未確認です。追加したテストファイルは、`tsconfig.json` が型チェックの対象から外しています。
+- サインインから 1 時間以上たったあとの保存（ログインの期限切れの案内と、もう一度サインインして保存し直す流れ）の、実機での確認。
+- 別のアプリに切り替えたときの動き（計画書の C-6）の確認。
+- ローカルの試作（`server.py`）は、`live-setup.js` と、メモ用に足した新しいファイルを配信しないので、動かない可能性があります（動かして確かめていません）。
+- `frontend/app.js` に `cb1468c` の行が残っていることを見る静的テスト（`tests/test_notes_list_app.mjs`）は、`cb1468c` の履歴がないとスキップされます。将来 `app.js` を正当に変えると失敗しうるので、見直す候補です。
+- 音声の遅れの修正を、実機の iPhone Safari で確かめること、`resume()` の位置・AudioContext の数・サイレントスイッチの影響（「見つけた不具合と、その扱い」の節）。
+- Cloudflare のロールバックの手順（「戻し方」の節）。
