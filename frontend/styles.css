@@ -205,3 +205,126 @@ h1 {
   .transcript-card { min-height: 140px; }
   .button { flex: 1 1 auto; }
 }
+
+/* Note saving (added): the auto-save switch and the result of saving a conversation as a note. */
+.autosave-row { margin: 20px 0 0; }
+.autosave-row[hidden], .note-save-box[hidden], .note-save-box [hidden] { display: none; }
+.switch {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 44px;
+  cursor: pointer;
+  font-weight: 600;
+}
+.switch input {
+  flex: none;
+  width: 24px;
+  height: 24px;
+  accent-color: var(--accent);
+  cursor: pointer;
+}
+.autosave-row .help-text { margin-top: 4px; }
+.note-save-box {
+  margin: 16px 0 0;
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--page);
+}
+.note-save-message { margin: 0; line-height: 1.7; overflow-wrap: anywhere; }
+.note-save-box .button { margin-top: 12px; min-height: 48px; }
+.note-save-box .help-text { margin-top: 8px; }
+@media (max-width: 620px) {
+  .note-save-box .button { width: 100%; }
+}
+
+/* Notes panel (added): list, open one note, delete. Shown only in the hosted version. */
+.notes-panel {
+  margin-top: 18px;
+  padding: clamp(20px, 4vw, 30px);
+  border: 1px solid var(--line);
+  border-radius: 24px;
+  background: var(--surface);
+  box-shadow: var(--shadow);
+}
+.notes-panel [hidden], .notes-panel[hidden] { display: none !important; }
+.notes-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+}
+.notes-head h2 { margin: 0; font-size: 1.12rem; font-weight: 700; }
+.notes-panel .button { min-height: 48px; }
+.button-danger { border-color: var(--danger); background: transparent; color: var(--danger); }
+.button-danger:not(:disabled):hover { background: var(--danger-bg); }
+.notes-body { margin-top: 20px; }
+.notes-status-message {
+  margin: 0 0 12px;
+  padding: 12px 14px;
+  border-radius: 12px;
+  background: var(--danger-bg);
+  color: var(--danger);
+  line-height: 1.7;
+  overflow-wrap: anywhere;
+}
+.notes-actions { display: flex; flex-wrap: wrap; gap: 10px; margin: 0 0 14px; }
+.notes-confirm {
+  margin: 0 0 16px;
+  padding: 14px;
+  border: 1px solid var(--danger);
+  border-radius: 12px;
+  background: var(--page);
+}
+.notes-confirm-text { margin: 0 0 12px; line-height: 1.7; font-weight: 600; overflow-wrap: anywhere; }
+.notes-confirm .notes-actions { margin-bottom: 0; }
+.notes-list-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+.notes-count { margin: 0; color: var(--muted); font-weight: 650; }
+.notes-items { display: grid; gap: 10px; margin: 0 0 16px; padding: 0; list-style: none; }
+.notes-item {
+  display: grid;
+  gap: 4px;
+  width: 100%;
+  min-height: 56px;
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: 13px;
+  background: var(--page);
+  color: var(--text);
+  cursor: pointer;
+  text-align: left;
+}
+.notes-item:not(:disabled):hover { border-color: var(--accent); }
+.notes-item:focus-visible { outline: 3px solid var(--accent); outline-offset: 3px; }
+.notes-item:disabled { cursor: not-allowed; opacity: 0.55; }
+.notes-item-date { color: var(--muted); font-size: 0.82rem; }
+.notes-item-title { font-weight: 650; line-height: 1.5; overflow-wrap: anywhere; }
+.notes-item-mark { color: var(--muted); font-size: 0.82rem; }
+.notes-detail-title { margin: 18px 0 0; font-size: 1.08rem; line-height: 1.5; overflow-wrap: anywhere; }
+.notes-detail-meta { margin: 4px 0 0; }
+.notes-detail-body {
+  max-height: 50vh;
+  margin: 14px 0 16px;
+  padding: 14px;
+  overflow: auto;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--page);
+  font: inherit;
+  line-height: 1.8;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+@media (max-width: 620px) {
+  .notes-head { align-items: flex-start; flex-direction: column; }
+  .notes-head .button, .notes-actions .button { width: 100%; }
+  .notes-list-head .button { flex: none; }
+  #notes-delete-all, #notes-delete-one, #notes-back { width: 100%; }
+}

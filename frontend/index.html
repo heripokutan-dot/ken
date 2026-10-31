@@ -14,7 +14,7 @@
       <header class="page-header">
         <p class="eyebrow">PERSONAL VOICE ASSISTANT</p>
         <h1>Gemini Live 音声会話</h1>
-        <p class="intro">マイクに向かって話しかけると、Gemini が音声で返答します。音声や会話履歴はこのアプリには保存されません。</p>
+        <p class="intro">マイクに向かって話しかけると、Gemini が音声で返答します。<span id="history-note">音声や会話履歴はこのアプリには保存されません。</span></p>
       </header>
 
       <section class="signin-panel" aria-labelledby="signin-heading">
@@ -43,6 +43,22 @@
           <button id="stop-button" class="button button-quiet" type="button" disabled>終了</button>
         </div>
         <p class="help-text">開始するとマイクの使用許可を求めます。「音声を中断」はブラウザーでの再生を止めます。終了するとマイクと接続を停止します。</p>
+
+        <div id="autosave-row" class="autosave-row" hidden>
+          <label class="switch">
+            <input id="autosave-switch" type="checkbox" checked>
+            <span>会話をメモとして自動保存</span>
+          </label>
+          <p class="help-text">オンのとき、会話が終わると（終了・エラー・切断）、文字起こしがメモとして保存されます。音声は保存されません。</p>
+        </div>
+
+        <div id="note-save" class="note-save" role="status" aria-live="polite">
+          <div id="note-save-box" class="note-save-box" hidden>
+            <p id="note-save-message" class="note-save-message"></p>
+            <button id="note-save-retry" class="button button-secondary" type="button" hidden>メモをもう一度保存</button>
+            <p id="note-save-hint" class="help-text" hidden>次の会話を始めると、消えます。</p>
+          </div>
+        </div>
       </section>
 
       <section class="transcript-grid" aria-label="会話の文字起こし">
@@ -62,8 +78,55 @@
         </article>
       </section>
 
+      <section id="notes-panel" class="notes-panel" aria-labelledby="notes-heading" hidden>
+        <div class="notes-head">
+          <div>
+            <p class="section-label">NOTES</p>
+            <h2 id="notes-heading">メモ</h2>
+          </div>
+          <button id="notes-toggle" class="button button-secondary" type="button" aria-expanded="false" aria-controls="notes-body">メモを開く</button>
+        </div>
+
+        <div id="notes-body" class="notes-body" hidden>
+          <div id="notes-status" class="notes-status" role="status" aria-live="polite">
+            <p id="notes-status-message" class="notes-status-message" hidden></p>
+            <div id="notes-status-actions" class="notes-actions" hidden>
+              <button id="notes-retry" class="button button-secondary" type="button" hidden>もう一度試す</button>
+              <button id="notes-status-refresh" class="button button-secondary" type="button" hidden>一覧を更新</button>
+            </div>
+          </div>
+          <p id="notes-busy" class="help-text" hidden></p>
+
+          <div id="notes-confirm" class="notes-confirm" role="group" aria-labelledby="notes-confirm-text" hidden>
+            <p id="notes-confirm-text" class="notes-confirm-text"></p>
+            <div class="notes-actions">
+              <button id="notes-confirm-yes" class="button button-danger" type="button">削除する</button>
+              <button id="notes-confirm-no" class="button button-secondary" type="button">やめる</button>
+            </div>
+          </div>
+
+          <div id="notes-list-view">
+            <div class="notes-list-head">
+              <p id="notes-count" class="notes-count" hidden></p>
+              <button id="notes-refresh" class="button button-secondary" type="button">更新</button>
+            </div>
+            <p id="notes-empty" class="help-text" hidden></p>
+            <ul id="notes-items" class="notes-items"></ul>
+            <button id="notes-delete-all" class="button button-danger" type="button" hidden>すべてのメモを削除</button>
+          </div>
+
+          <div id="notes-detail-view" hidden>
+            <button id="notes-back" class="button button-secondary" type="button">一覧に戻る</button>
+            <h3 id="notes-detail-title" class="notes-detail-title"></h3>
+            <p id="notes-detail-meta" class="help-text notes-detail-meta"></p>
+            <pre id="notes-detail-body" class="notes-detail-body"></pre>
+            <button id="notes-delete-one" class="button button-danger" type="button">このメモを削除</button>
+          </div>
+        </div>
+      </section>
+
       <footer class="page-footer">
-        <p>ローカル利用向けの試作アプリです。公開サーバーには配置しないでください。</p>
+        <p><span id="footer-note">ローカル利用向けの試作アプリです。公開サーバーには配置しないでください。</span></p>
       </footer>
     </main>
   </body>

@@ -1,6 +1,9 @@
 import { pcm16ToFloat } from "./pcm-utils.js";
 import { userFacingError, tokenErrorMessage, closeDetail } from "./error-messages.js";
 import { buildSetupMessage, messageDataToText } from "./live-setup.js";
+import { createTranscriptRecorder } from "./transcript-recorder.js";
+import { createNoteSaver, postNote } from "./notes-client.js";
+import { createNotesApi, createNotesPanel } from "./notes-list-client.js";
 
 const statusElement = document.querySelector("#status");
 const statusText = document.querySelector("#status-text");
@@ -10,6 +13,38 @@ const outputTranscriptElement = document.querySelector("#output-transcript");
 const startButton = document.querySelector("#start-button");
 const interruptButton = document.querySelector("#interrupt-button");
 const stopButton = document.querySelector("#stop-button");
+const historyNoteElement = document.querySelector("#history-note");
+const autoSaveRow = document.querySelector("#autosave-row");
+const autoSaveSwitch = document.querySelector("#autosave-switch");
+const noteSaveBox = document.querySelector("#note-save-box");
+const noteSaveMessage = document.querySelector("#note-save-message");
+const noteSaveRetry = document.querySelector("#note-save-retry");
+const noteSaveHint = document.querySelector("#note-save-hint");
+const footerNoteElement = document.querySelector("#footer-note");
+const notesSection = document.querySelector("#notes-panel");
+const notesToggle = document.querySelector("#notes-toggle");
+const notesBody = document.querySelector("#notes-body");
+const notesStatusMessage = document.querySelector("#notes-status-message");
+const notesStatusActions = document.querySelector("#notes-status-actions");
+const notesRetry = document.querySelector("#notes-retry");
+const notesStatusRefresh = document.querySelector("#notes-status-refresh");
+const notesBusy = document.querySelector("#notes-busy");
+const notesConfirm = document.querySelector("#notes-confirm");
+const notesConfirmText = document.querySelector("#notes-confirm-text");
+const notesConfirmYes = document.querySelector("#notes-confirm-yes");
+const notesConfirmNo = document.querySelector("#notes-confirm-no");
+const notesListView = document.querySelector("#notes-list-view");
+const notesCount = document.querySelector("#notes-count");
+const notesRefresh = document.querySelector("#notes-refresh");
+const notesEmpty = document.querySelector("#notes-empty");
+const notesItems = document.querySelector("#notes-items");
+const notesDeleteAll = document.querySelector("#notes-delete-all");
+const notesDetailView = document.querySelector("#notes-detail-view");
+const notesBack = document.querySelector("#notes-back");
+const notesDetailTitle = document.querySelector("#notes-detail-title");
+const notesDetailMeta = document.querySelector("#notes-detail-meta");
+const notesDetailBody = document.querySelector("#notes-detail-body");
+const notesDeleteOne = document.querySelector("#notes-delete-one");
 
 const SYSTEM_INSTRUCTION =
   "あなたは日本語で自然に会話する音声アシスタントです。" +
@@ -17,6 +52,8 @@ const SYSTEM_INSTRUCTION =
 const AUDIO_SAMPLE_RATE = 24000;
 const INPUT_MIME_TYPE = "audio/pcm;rate=16000";
 const GOOGLE_SCRIPT_TIMEOUT_MS = 10000;
+const AUTO_SAVE_KEY = "ken.autoSaveNotes";
+const HOSTED_HISTORY_NOTE = "音声は保存されません。「自動保存」がオンのとき、会話の文字起こしが、メモとして保存されます（あなただけが見られます）。";
 
 let lifecycle = 0;
 let isStarting = false;
@@ -33,10 +70,23 @@ let suppressPlayback = false;
 let committedInputTranscript = "";
 let interimInputTranscript = "";
 let outputTranscript = "";
+const transcriptRecorder = createTranscriptRecorder();
 // Hosted (Google sign-in) mode: the ID token lives only in memory, never in storage.
 let authRequired = false;
 let authClientId = null;
 let idToken = null;
+let conversationActive = false;
+// Saving a finished conversation as a note. It reads the ID token at the moment of each request.
+const noteSaver = createNoteSaver({ send: (note) => postNote(note, { idToken }), onChange: renderNoteSave });
+// Notes panel (hosted version only): the list, one note, deleting. Its state lives in notes-list-client.js and this part
+// only draws it. It reads the ID token at the moment of each request, and it does not touch the conversation code above.
+const HOSTED_FOOTER_NOTE = "個人用のアプリです。許可された1人だけが使えます。";
+const notesPanel = createNotesPanel({ api: createNotesApi({ getIdToken: () => idToken }), onChange: renderNotes });
+let renderedNotesListVersion = -1;
+let renderedNotesDetailVersion = -1;
+let renderedNotesScreen = "list";
+let renderedNotesConfirm = false;
+let lastOpenedNoteId = null;
 
 function setStatus(message, state) {
   statusText.textContent = message;
@@ -146,6 +196,7 @@ function handleServerMessage(message) {
     committedInputTranscript = appendTranscript(committedInputTranscript, content.inputTranscription.text);
     interimInputTranscript = "";
     renderInputTranscript();
+    transcriptRecorder.add("user", content.inputTranscription.text);
   }
 
   if (content.interimInputTranscription?.text) {
@@ -156,6 +207,7 @@ function handleServerMessage(message) {
   if (content.outputTranscription?.text) {
     outputTranscript = appendTranscript(outputTranscript, content.outputTranscription.text);
     outputTranscriptElement.textContent = outputTranscript;
+    transcriptRecorder.add("ai", content.outputTranscription.text);
   }
 
   for (const part of content.modelTurn?.parts ?? []) {
@@ -230,6 +282,7 @@ async function stopSession() {
   clearError();
   setStatus("未接続", "idle");
   updateControls();
+  saveEndedConversation();
 }
 
 async function failSession(message) {
@@ -241,6 +294,7 @@ async function failSession(message) {
   showError(message);
   setStatus("エラー", "error");
   updateControls();
+  saveEndedConversation();
 }
 
 let lastCloseDetail = "";
@@ -254,6 +308,7 @@ async function handleUnexpectedClose() {
   showError(`Gemini Live との接続が切れました。「会話を開始」から再接続してください。${lastCloseDetail ? `（${lastCloseDetail}）` : ""}`);
   setStatus("接続が切断されました", "error");
   updateControls();
+  saveEndedConversation();
 }
 
 function connectWebSocket(token, model, websocketBaseUrl, runId) {
@@ -326,6 +381,8 @@ async function startSession() {
   isStarting = true;
   clearError();
   resetTranscripts();
+  transcriptRecorder.reset();
+  noteSaver.reset();
   setStatus("接続中…", "connecting");
   updateControls();
 
@@ -413,6 +470,7 @@ async function startSession() {
     if (runId !== lifecycle) return;
 
     isConnected = true;
+    conversationActive = true;
     isStarting = false;
     setStatus("会話中", "connected");
     updateControls();
@@ -427,6 +485,158 @@ async function startSession() {
       isStarting = false;
       updateControls();
     }
+  }
+}
+
+function renderNoteSave(view) {
+  noteSaveBox.hidden = !view.visible;
+  noteSaveMessage.textContent = view.message;
+  noteSaveRetry.hidden = !view.showRetry;
+  noteSaveRetry.disabled = view.retryDisabled;
+  noteSaveHint.hidden = !view.hint;
+  noteSaveHint.textContent = view.hint;
+}
+
+function readAutoSaveSetting() {
+  try {
+    return localStorage.getItem(AUTO_SAVE_KEY) !== "false";
+  } catch {
+    return true;
+  }
+}
+
+function writeAutoSaveSetting(value) {
+  try {
+    localStorage.setItem(AUTO_SAVE_KEY, value ? "true" : "false");
+  } catch {
+    // Without storage the switch still works for this page view.
+  }
+}
+
+function showAutoSaveControls() {
+  autoSaveRow.hidden = false;
+  historyNoteElement.textContent = HOSTED_HISTORY_NOTE;
+}
+
+function showNotesPanel() {
+  notesSection.hidden = false;
+}
+
+function showHostedFooter() {
+  footerNoteElement.textContent = HOSTED_FOOTER_NOTE;
+}
+
+// One note in the list: a button with its time, its title and, for a note that was cut short, a mark.
+// Everything goes in with textContent; nothing from a note is ever read as HTML.
+function buildNotesItem(item) {
+  const entry = document.createElement("li");
+  const button = document.createElement("button");
+  button.type = "button";
+  button.className = "notes-item";
+  button.dataset.noteId = item.id;
+  const date = document.createElement("span");
+  date.className = "notes-item-date";
+  date.textContent = item.dateText;
+  const title = document.createElement("span");
+  title.className = "notes-item-title";
+  title.textContent = item.titleText;
+  button.append(date, title);
+  if (item.truncatedMark !== "") {
+    const mark = document.createElement("span");
+    mark.className = "notes-item-mark";
+    mark.textContent = item.truncatedMark;
+    button.append(mark);
+  }
+  entry.append(button);
+  return entry;
+}
+
+function focusNotesItem(id) {
+  for (const button of notesItems.querySelectorAll("button")) {
+    if (button.dataset.noteId === id) {
+      button.focus();
+      return;
+    }
+  }
+}
+
+function renderNotes(view) {
+  const locked = view.busy;
+  notesToggle.textContent = view.open ? "メモを閉じる" : "メモを開く";
+  notesToggle.setAttribute("aria-expanded", view.open ? "true" : "false");
+  notesBody.hidden = !view.open;
+  if (!view.open) lastOpenedNoteId = null;
+
+  notesStatusMessage.textContent = view.status.message;
+  notesStatusMessage.hidden = view.status.message === "";
+  notesRetry.hidden = !view.status.showRetry;
+  notesRetry.disabled = locked;
+  notesStatusRefresh.hidden = !view.status.showRefresh;
+  notesStatusRefresh.disabled = locked;
+  notesStatusActions.hidden = !view.status.showRetry && !view.status.showRefresh;
+  notesBusy.textContent = view.busyText;
+  notesBusy.hidden = view.busyText === "";
+
+  // The list and the body are drawn again only when they changed, so that a focused button is not replaced meanwhile.
+  if (view.listVersion !== renderedNotesListVersion) {
+    renderedNotesListVersion = view.listVersion;
+    notesItems.replaceChildren(...(view.list === null ? [] : view.list.items.map(buildNotesItem)));
+  }
+  if (view.detailVersion !== renderedNotesDetailVersion) {
+    renderedNotesDetailVersion = view.detailVersion;
+    notesDetailTitle.textContent = view.detail === null ? "" : view.detail.titleText;
+    notesDetailMeta.textContent = view.detail === null ? "" : [view.detail.dateText, view.detail.truncatedMark].filter(Boolean).join(" ");
+    notesDetailBody.textContent = view.detail === null ? "" : view.detail.body;
+    notesDetailBody.scrollTop = 0;
+  }
+
+  const onList = view.screen === "list";
+  notesListView.hidden = !onList;
+  notesDetailView.hidden = onList;
+  notesCount.textContent = view.list === null ? "" : view.list.countText;
+  notesCount.hidden = view.list === null;
+  notesEmpty.textContent = view.list === null ? "" : view.list.emptyText;
+  notesEmpty.hidden = view.list === null || view.list.emptyText === "";
+  notesRefresh.disabled = locked;
+  notesDeleteAll.hidden = !view.canAskDeleteAll;
+  notesDeleteAll.disabled = locked;
+  for (const button of notesItems.querySelectorAll("button")) button.disabled = locked || view.confirm !== null;
+  notesBack.disabled = locked;
+  notesDeleteOne.hidden = !view.canAskDeleteOne;
+  notesDeleteOne.disabled = locked;
+
+  notesConfirm.hidden = view.confirm === null;
+  if (view.confirm !== null) {
+    notesConfirmText.textContent = view.confirm.text;
+    notesConfirmYes.textContent = view.confirm.yesLabel;
+    notesConfirmNo.textContent = view.confirm.noLabel;
+  }
+  notesConfirmYes.disabled = locked;
+  notesConfirmNo.disabled = locked;
+
+  // Where the focus goes when the screen changes: the question opens on "cancel" (the safe answer), a note opens on
+  // "back to the list", and going back returns to the note that was open.
+  const screenChanged = view.screen !== renderedNotesScreen;
+  renderedNotesScreen = view.screen;
+  const confirmAppeared = view.confirm !== null && !renderedNotesConfirm;
+  renderedNotesConfirm = view.confirm !== null;
+  if (view.open && confirmAppeared) notesConfirmNo.focus();
+  else if (view.open && screenChanged) {
+    if (view.screen === "detail") notesBack.focus();
+    else if (lastOpenedNoteId !== null) focusNotesItem(lastOpenedNoteId);
+  }
+}
+
+// Called after the clean-up of a conversation that was really running. Never waits and never throws,
+// so the end-of-conversation code that calls it behaves as before whatever happens here.
+function saveEndedConversation() {
+  if (!conversationActive) return;
+  conversationActive = false;
+  try {
+    if (!authRequired || !autoSaveSwitch.checked) return;
+    void noteSaver.submit(transcriptRecorder.take());
+  } catch {
+    // Saving is best effort.
   }
 }
 
@@ -464,6 +674,9 @@ async function initSignIn() {
 
   authRequired = true;
   authClientId = config.clientId;
+  showAutoSaveControls();
+  showNotesPanel();
+  showHostedFooter();
   updateControls();
 
   const container = document.querySelector("#google-signin");
@@ -508,6 +721,27 @@ async function initSignIn() {
 startButton.addEventListener("click", () => void startSession());
 interruptButton.addEventListener("click", interruptPlayback);
 stopButton.addEventListener("click", () => void stopSession());
+autoSaveSwitch.addEventListener("change", () => writeAutoSaveSetting(autoSaveSwitch.checked));
+noteSaveRetry.addEventListener("click", () => void noteSaver.retry());
+notesToggle.addEventListener("click", () => {
+  if (notesPanel.getView().open) notesPanel.close();
+  else void notesPanel.open();
+});
+notesRefresh.addEventListener("click", () => void notesPanel.refresh());
+notesStatusRefresh.addEventListener("click", () => void notesPanel.refresh());
+notesRetry.addEventListener("click", () => void notesPanel.retry());
+notesItems.addEventListener("click", (event) => {
+  const button = event.target instanceof Element ? event.target.closest("button[data-note-id]") : null;
+  if (!button) return;
+  lastOpenedNoteId = button.dataset.noteId;
+  void notesPanel.select(button.dataset.noteId);
+});
+notesBack.addEventListener("click", () => void notesPanel.back());
+notesDeleteOne.addEventListener("click", () => void notesPanel.askDeleteOne());
+notesDeleteAll.addEventListener("click", () => void notesPanel.askDeleteAll());
+notesConfirmYes.addEventListener("click", () => void notesPanel.confirmDelete());
+notesConfirmNo.addEventListener("click", () => void notesPanel.cancelConfirm());
+autoSaveSwitch.checked = readAutoSaveSetting();
 
 setStatus("未接続", "idle");
 updateControls();
