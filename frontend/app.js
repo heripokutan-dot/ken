@@ -392,6 +392,8 @@ async function startSession() {
     }
 
     audioContext = new AudioContext();
+    nextPlaybackTime = 0;
+    suppressPlayback = false;
     const microphoneRequest = navigator.mediaDevices.getUserMedia({
       audio: {
         channelCount: { ideal: 1 },
