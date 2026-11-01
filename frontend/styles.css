@@ -225,6 +225,26 @@ h1 {
   cursor: pointer;
 }
 .autosave-row .help-text { margin-top: 4px; }
+
+/* Character menu (added): chosen before a conversation starts; locked while one is starting, running or ending.
+   The text is 16px or larger so that iPhone Safari does not zoom the page in when the menu is tapped. */
+.persona-row { margin: 24px 0 0; }
+.persona-label { display: block; margin-bottom: 6px; font-weight: 600; }
+.persona-select {
+  display: block;
+  width: 100%;
+  min-height: 46px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 13px;
+  background: var(--surface);
+  color: var(--text);
+  font-family: inherit;
+  font-size: 16px;
+}
+.persona-select:focus-visible { outline: 3px solid var(--accent); outline-offset: 3px; }
+.persona-select:disabled { cursor: not-allowed; opacity: 0.45; }
+.persona-row .help-text { margin-top: 6px; }
 .note-save-box {
   margin: 16px 0 0;
   padding: 12px 14px;

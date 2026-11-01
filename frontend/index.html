@@ -37,6 +37,17 @@
 
         <p id="error-message" class="error-message" role="alert" hidden></p>
 
+        <div class="persona-row">
+          <label class="persona-label" for="persona-select">キャラ（声と話し方）</label>
+          <select id="persona-select" class="persona-select">
+            <option value="standard" selected>標準</option>
+            <option value="buddy">相棒</option>
+            <option value="teacher">先生</option>
+            <option value="listener">聞き役</option>
+          </select>
+          <p class="help-text">次に会話を始めたときから変わります。</p>
+        </div>
+
         <div class="controls" aria-label="会話の操作">
           <button id="start-button" class="button button-primary" type="button">会話を開始</button>
           <button id="interrupt-button" class="button button-secondary" type="button" disabled>音声を中断</button>
