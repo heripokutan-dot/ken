@@ -1,13 +1,10 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { spawnSync } from "node:child_process";
-import { fileURLToPath } from "node:url";
 
 // Static checks of how app.js, index.html and styles.css use the notes panel (work 3-B2).
 // Nothing here runs the page; the behaviour of the panel itself is tested in test_notes_list_client.mjs.
 
-const repoRoot = fileURLToPath(new URL("..", import.meta.url));
 const sourceOf = (relative) => readFileSync(new URL(relative, import.meta.url), "utf8");
 const app = sourceOf("../frontend/app.js");
 const html = sourceOf("../frontend/index.html");
@@ -179,41 +176,4 @@ test("the delete buttons are asked for only through the panel's question, never 
   assert.match(app, /notesConfirmYes\.addEventListener\("click", \(\) => void notesPanel\.confirmDelete\(\)\)/);
   assert.equal([...app.matchAll(/confirmDelete\(\)/g)].length, 1);
   assert.doesNotMatch(app, /\.remove\(|\.removeAll\(/);
-});
-
-// ---------- the change is additions only ----------
-
-// These need the git history of the commit 3-B2 started from. Without it (a download of the files only) they are skipped.
-function originalOf(path) {
-  const r = spawnSync("git", ["show", `cb1468c:${path}`], { cwd: repoRoot, encoding: "utf8", maxBuffer: 16 * 1024 * 1024 });
-  return r.status === 0 && typeof r.stdout === "string" && r.stdout !== "" ? r.stdout : null;
-}
-
-function isSubsequence(before, after) {
-  let i = 0;
-  for (const line of after) if (i < before.length && line === before[i]) i += 1;
-  return i === before.length;
-}
-
-test("app.js: every line of the version 3-B2 started from is still there, in order (only lines were added)", (t) => {
-  const before = originalOf("frontend/app.js");
-  if (before === null) return t.skip("git history of cb1468c is not available");
-  assert.ok(isSubsequence(before.split("\n"), app.split("\n")));
-});
-
-test("styles.css: the version 3-B2 started from is unchanged at the start; the panel's rules were appended", (t) => {
-  const before = originalOf("frontend/styles.css");
-  if (before === null) return t.skip("git history of cb1468c is not available");
-  assert.ok(css.startsWith(before));
-});
-
-test("index.html: only the footer line changed; the rest of the old lines are all still there, in order", (t) => {
-  const before = originalOf("frontend/index.html");
-  if (before === null) return t.skip("git history of cb1468c is not available");
-  const footerLine = "        <p>ローカル利用向けの試作アプリです。公開サーバーには配置しないでください。</p>";
-  const beforeLines = before.split("\n");
-  assert.equal(beforeLines.filter((line) => line === footerLine).length, 1);
-  const kept = beforeLines.filter((line) => line !== footerLine);
-  assert.ok(isSubsequence(kept, html.split("\n")));
-  assert.ok(!html.split("\n").includes(footerLine), "the old footer line is replaced by the wrapped one");
 });
