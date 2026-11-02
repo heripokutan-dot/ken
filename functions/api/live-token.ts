@@ -1,6 +1,6 @@
 // POST /api/live-token — Cloudflare Pages Function.
 // Order: same-origin request checks -> sign-in verification (google | access) -> allowlisted email
-//        -> rate limit (D1) -> Gemini ephemeral token.
+//        -> rate limit (D1) -> request body (which character; 1 KB at most) -> Gemini ephemeral token.
 // Nothing (key, token, provider error text) is logged or echoed back on failure.
 
 import { validateTokenRequest, errorResponse, SECURITY_HEADERS } from "../_shared/http-security.ts";
@@ -8,6 +8,8 @@ import { verifyAccessJwt } from "../_shared/access-auth.ts";
 import { verifyGoogleIdToken } from "../_shared/google-auth.ts";
 import { createGeminiEphemeralToken, GeminiTokenError } from "../_shared/gemini-token.ts";
 import { checkRateLimit, type D1Like } from "../_shared/rate-limit.ts";
+import { findPersona } from "../_shared/personas.ts";
+import { readJsonBody } from "../_shared/read-json.ts";
 
 export interface LiveTokenEnv {
   AUTH_PROVIDER?: string; // "google" (default recommended) or "access"
@@ -101,8 +103,29 @@ export async function handleLiveToken(
 
   if (!env.GEMINI_API_KEY) return errorResponse(503, "gemini_not_configured");
 
+  // Which character was chosen. The body is read only here, after sign-in and the rate limit have passed, and is
+  // limited to 1 KB. Only one thing in it is used: the id of a character, looked up in the server's own table.
+  // No body, {} or no "persona" means the standard character (no voice in the token, the same body as before).
+  // Anything unreadable or not in the table is refused; there is no fallback to standard. Google is not called then.
+  const parsed = await readJsonBody(request);
+  if (parsed.kind === "too_large") return errorResponse(413, "payload_too_large");
+  if (parsed.kind === "invalid") return errorResponse(400, "invalid_persona");
+  let voiceName: string | null = null;
+  if (parsed.kind === "json") {
+    const input = parsed.value;
+    if (typeof input !== "object" || input === null || Array.isArray(input)) {
+      return errorResponse(400, "invalid_persona");
+    }
+    const requested = Object.hasOwn(input, "persona") ? (input as Record<string, unknown>).persona : undefined;
+    if (requested !== undefined) {
+      const persona = findPersona(requested);
+      if (!persona) return errorResponse(400, "invalid_persona");
+      voiceName = persona.voiceName;
+    }
+  }
+
   try {
-    const issued = await createGeminiEphemeralToken({ apiKey: env.GEMINI_API_KEY, fetcher });
+    const issued = await createGeminiEphemeralToken({ apiKey: env.GEMINI_API_KEY, fetcher, voiceName });
     return new Response(
       JSON.stringify({ token: issued.token, model: issued.model, websocket_url: issued.websocketUrl }),
       { status: 200, headers: { ...SECURITY_HEADERS, "Content-Type": "application/json; charset=utf-8" } },

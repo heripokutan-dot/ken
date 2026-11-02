@@ -1,5 +1,5 @@
 import { pcm16ToFloat } from "./pcm-utils.js";
-import { userFacingError, tokenErrorMessage, closeDetail } from "./error-messages.js";
+import { userFacingError, tokenErrorMessage, closeDetail, personaRejectedHint } from "./error-messages.js";
 import { buildSetupMessage, messageDataToText } from "./live-setup.js";
 import { getPersona, readStoredPersonaId, writeStoredPersonaId } from "./personas.js";
 import { createTranscriptRecorder } from "./transcript-recorder.js";
@@ -369,7 +369,7 @@ function connectWebSocket(token, model, websocketBaseUrl, runId, persona) {
     activeSocket.addEventListener("close", (closeEvent) => {
       lastCloseDetail = closeDetail(closeEvent?.code, closeEvent?.reason);
       if (!setupFinished) {
-        reject(new Error(`Gemini Live の接続がセットアップ完了前に終了しました。${lastCloseDetail ? `（${lastCloseDetail}）` : ""}`));
+        reject(new Error(`Gemini Live の接続がセットアップ完了前に終了しました。${lastCloseDetail ? `（${lastCloseDetail}）` : ""}${personaRejectedHint(persona.id)}`));
       }
       if (socket === activeSocket) {
         socket = null;
@@ -418,12 +418,14 @@ async function startSession() {
 
     const headers = { Accept: "application/json", "Content-Type": "application/json" };
     if (authRequired) headers.Authorization = `Bearer ${idToken}`;
+    // Standard sends the same empty body as before; any other character sends its id (never a voice name).
+    const tokenRequestBody = persona.id === "standard" ? "{}" : JSON.stringify({ persona: persona.id });
     const tokenResponse = await fetch("/api/live-token", {
       method: "POST",
       credentials: "same-origin",
       cache: "no-store",
       headers,
-      body: "{}",
+      body: tokenRequestBody,
     });
     if (!tokenResponse.ok) {
       if (authRequired && tokenResponse.status === 401) {
@@ -432,7 +434,7 @@ async function startSession() {
       }
       const errorBody = await tokenResponse.json().catch(() => null);
       const errorCode = typeof errorBody?.error === "string" ? errorBody.error : undefined;
-      throw new Error(tokenErrorMessage(tokenResponse.status, errorCode, errorBody));
+      throw new Error(tokenErrorMessage(tokenResponse.status, errorCode, errorBody, persona.id));
     }
     const tokenData = await tokenResponse.json().catch(() => {
       throw new Error(tokenErrorMessage(401));

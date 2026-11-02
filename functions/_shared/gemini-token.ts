@@ -84,10 +84,24 @@ async function safeGoogleErrorInfo(
   }
 }
 
+// The constraints placed in the token. Without a voice it is { model } only, exactly as before voices existed.
+interface BidiGenerateContentSetup {
+  model: string;
+  generationConfig?: {
+    responseModalities: string[];
+    speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: string } } };
+  };
+}
+
+// voiceName: the voice to put into the token, or null/omitted for none (the "standard" character; the body is then
+// identical to what it was before). The name always comes from the server's own table (personas.ts), never from a request.
+// NOT CONFIRMED: that Google accepts and enforces a voice here, and whether the lock covers generationConfig as a
+// whole or only the voice.
 export async function createGeminiEphemeralToken(input: {
   apiKey: string | undefined;
   fetcher?: typeof fetch;
   now?: Date;
+  voiceName?: string | null;
 }): Promise<EphemeralToken> {
   if (!input.apiKey) throw new GeminiTokenError(503, "gemini_not_configured");
   const fetcher = input.fetcher ?? fetch;
@@ -95,16 +109,25 @@ export async function createGeminiEphemeralToken(input: {
   // Google's documented format is YYYY-MM-DDTHH:MM:SSZ (no milliseconds).
   const plusMinutes = (m: number) => new Date(now.getTime() + m * 60_000).toISOString().replace(/\.\d{3}Z$/, "Z");
 
+  // The REST auth_tokens resource has no "liveConnectConstraints" field (Google answered 400: Unknown name
+  // "liveConnectConstraints" at 'auth_token'); its constraints live in bidiGenerateContentSetup, which mirrors the
+  // WebSocket setup message. The model is always locked. A voice is locked too, only when one is given; the browser's
+  // setup supplies the rest.
+  const bidiGenerateContentSetup: BidiGenerateContentSetup = {
+    model: `models/${MODEL_ID}`,
+  };
+  if (input.voiceName) {
+    bidiGenerateContentSetup.generationConfig = {
+      responseModalities: ["AUDIO"],
+      speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: input.voiceName } } },
+    };
+  }
+
   const body = {
     uses: 1,
     expireTime: plusMinutes(30),
     newSessionExpireTime: plusMinutes(1),
-    // The REST auth_tokens resource has no "liveConnectConstraints" field (Google answered 400: Unknown name
-    // "liveConnectConstraints" at 'auth_token'); its constraints live in bidiGenerateContentSetup, which mirrors the
-    // WebSocket setup message. Only the model is locked here; the browser's setup supplies the rest.
-    bidiGenerateContentSetup: {
-      model: `models/${MODEL_ID}`,
-    },
+    bidiGenerateContentSetup,
   };
 
   let res: Response;
