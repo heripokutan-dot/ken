@@ -2,9 +2,14 @@
 // instruction. "standard" is the default: it asks for no voice and adds nothing, so its setup message is the same
 // as it was before characters existed.
 //
+// EXPERIMENT (temporary change, to see whether a voice takes effect at all):
+// The voice names below were swapped from Pulcherrima / Algieba / Despina (buddy / teacher / listener) to
+// Puck / Charon / Kore. They are names that appear in Google's general voice list, chosen from general knowledge and
+// NOT checked against the official list. Whether they work with gemini-3.8-live is not confirmed.
+//
 // NOT CONFIRMED for gemini-3.8-live (see docs/project-status.md):
-//   - that these voice names exist for that model (Algieba in particular is not confirmed against Google's official list), and
-//   - that a voice is accepted at generationConfig.speechConfig.voiceConfig.prebuiltVoiceConfig.voiceName.
+//   - that these voice names exist for that model, and
+//   - that a voice is accepted at generationConfig.speechConfig.voiceConfig.prebuiltVoiceConfig.voiceName at all.
 // If a voice does not work, Google closes the socket and the page shows the close code; "standard" always works as before.
 //
 // A choice is kept (and remembered on the phone) as one of these ids, never as a voice name or as Japanese text.
@@ -16,19 +21,19 @@ export const PERSONAS = Object.freeze([
   Object.freeze({
     id: "buddy",
     label: "相棒",
-    voiceName: "Pulcherrima",
+    voiceName: "Puck",
     instruction: "明るく積極的に話し、返事は短く、話を前に進める。",
   }),
   Object.freeze({
     id: "teacher",
     label: "先生",
-    voiceName: "Algieba",
+    voiceName: "Charon",
     instruction: `落ち着いて丁寧に話し、必要に応じて例え話で説明する。${PRIORITY}`,
   }),
   Object.freeze({
     id: "listener",
     label: "聞き役",
-    voiceName: "Despina",
+    voiceName: "Kore",
     instruction: `穏やかに話し、まず受け止めてから、質問を一つ返す。${PRIORITY}`,
   }),
 ]);
