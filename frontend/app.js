@@ -1,6 +1,7 @@
 import { pcm16ToFloat } from "./pcm-utils.js";
 import { userFacingError, tokenErrorMessage, closeDetail } from "./error-messages.js";
 import { buildSetupMessage, messageDataToText } from "./live-setup.js";
+import { getPersona, readStoredPersonaId, writeStoredPersonaId } from "./personas.js";
 import { createTranscriptRecorder } from "./transcript-recorder.js";
 import { createNoteSaver, postNote } from "./notes-client.js";
 import { createNotesApi, createNotesPanel } from "./notes-list-client.js";
@@ -13,6 +14,7 @@ const outputTranscriptElement = document.querySelector("#output-transcript");
 const startButton = document.querySelector("#start-button");
 const interruptButton = document.querySelector("#interrupt-button");
 const stopButton = document.querySelector("#stop-button");
+const personaSelect = document.querySelector("#persona-select");
 const historyNoteElement = document.querySelector("#history-note");
 const autoSaveRow = document.querySelector("#autosave-row");
 const autoSaveSwitch = document.querySelector("#autosave-switch");
@@ -107,6 +109,8 @@ function updateControls() {
   startButton.disabled = isStarting || isConnected || (authRequired && !idToken);
   interruptButton.disabled = !isConnected;
   stopButton.disabled = !(isStarting || isConnected || socket || microphoneStream || audioContext);
+  // The character is fixed when a conversation starts: no changes while one is starting, running or still being closed.
+  personaSelect.disabled = Boolean(isStarting || isConnected || socket || microphoneStream || audioContext);
 }
 
 function renderInputTranscript() {
@@ -311,7 +315,7 @@ async function handleUnexpectedClose() {
   saveEndedConversation();
 }
 
-function connectWebSocket(token, model, websocketBaseUrl, runId) {
+function connectWebSocket(token, model, websocketBaseUrl, runId, persona) {
   return new Promise((resolve, reject) => {
     let setupFinished = false;
     const wsUrl = new URL(websocketBaseUrl);
@@ -324,7 +328,7 @@ function connectWebSocket(token, model, websocketBaseUrl, runId) {
         activeSocket.close();
         return;
       }
-      const setup = buildSetupMessage(model, SYSTEM_INSTRUCTION);
+      const setup = buildSetupMessage(model, SYSTEM_INSTRUCTION, { voiceName: persona.voiceName, extraInstruction: persona.instruction });
       activeSocket.send(JSON.stringify(setup));
     });
 
@@ -377,6 +381,7 @@ function connectWebSocket(token, model, websocketBaseUrl, runId) {
 
 async function startSession() {
   if (isStarting || isConnected) return;
+  const persona = getPersona(personaSelect.value); // the choice made when the conversation starts is the one used
   const runId = ++lifecycle;
   isStarting = true;
   clearError();
@@ -437,7 +442,7 @@ async function startSession() {
     }
     if (runId !== lifecycle) return;
 
-    await connectWebSocket(tokenData.token, tokenData.model, tokenData.websocket_url, runId);
+    await connectWebSocket(tokenData.token, tokenData.model, tokenData.websocket_url, runId, persona);
     if (runId !== lifecycle) return;
 
     await audioContext.audioWorklet.addModule("/pcm-worklet.js");
@@ -724,6 +729,11 @@ startButton.addEventListener("click", () => void startSession());
 interruptButton.addEventListener("click", interruptPlayback);
 stopButton.addEventListener("click", () => void stopSession());
 autoSaveSwitch.addEventListener("change", () => writeAutoSaveSetting(autoSaveSwitch.checked));
+personaSelect.addEventListener("change", () => {
+  const persona = getPersona(personaSelect.value);
+  personaSelect.value = persona.id;
+  writeStoredPersonaId(persona.id);
+});
 noteSaveRetry.addEventListener("click", () => void noteSaver.retry());
 notesToggle.addEventListener("click", () => {
   if (notesPanel.getView().open) notesPanel.close();
@@ -744,6 +754,7 @@ notesDeleteAll.addEventListener("click", () => void notesPanel.askDeleteAll());
 notesConfirmYes.addEventListener("click", () => void notesPanel.confirmDelete());
 notesConfirmNo.addEventListener("click", () => void notesPanel.cancelConfirm());
 autoSaveSwitch.checked = readAutoSaveSetting();
+personaSelect.value = readStoredPersonaId();
 
 setStatus("未接続", "idle");
 updateControls();

@@ -1,14 +1,26 @@
 // Builds the first WebSocket message for Gemini Live. Field placement follows Google's BidiGenerateContentSetup:
 // responseModalities belongs inside generationConfig (Google closed the socket with code 1007,
 // 'Unknown name "responseModalities" at setup', when it was placed directly under setup).
-export function buildSetupMessage(model, systemInstruction) {
+//
+// The third argument is optional: { voiceName, extraInstruction }. Left out (or empty), the message is exactly what it
+// was before characters existed. A voice goes next to responseModalities, inside generationConfig; an extra instruction
+// is added after the common text, which is never changed. (That Google accepts this speechConfig for the model is not
+// confirmed; see docs/project-status.md.)
+export function buildSetupMessage(model, systemInstruction, options) {
+  const generationConfig = { responseModalities: ["AUDIO"] };
+  const voiceName = options?.voiceName;
+  if (typeof voiceName === "string" && voiceName !== "") {
+    generationConfig.speechConfig = { voiceConfig: { prebuiltVoiceConfig: { voiceName } } };
+  }
+  const extraInstruction = options?.extraInstruction;
+  const text = typeof extraInstruction === "string" ? systemInstruction + extraInstruction : systemInstruction;
   return {
     setup: {
       model: `models/${model}`,
-      generationConfig: { responseModalities: ["AUDIO"] },
+      generationConfig,
       inputAudioTranscription: {},
       outputAudioTranscription: {},
-      systemInstruction: { parts: [{ text: systemInstruction }] },
+      systemInstruction: { parts: [{ text }] },
     },
   };
 }
