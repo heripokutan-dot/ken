@@ -48,10 +48,24 @@ function geminiFailureHint(body) {
   return "";
 }
 
+// Added when a character with a voice may have been the reason a connection was refused. NOT CONFIRMED that a refused
+// voice is the cause; the wording says "may have been".
+export const PERSONA_REJECTED_HINT =
+  "選んだキャラ（声）の指定が拒否された可能性があります。「標準」に切り替えて、もう一度お試しください。";
+
+// The sentence above for a character with a voice (any id but "standard"), and nothing for "standard" or for no
+// choice. It never repeats the value it was given.
+export function personaRejectedHint(personaId) {
+  return typeof personaId === "string" && personaId !== "" && personaId !== "standard" ? PERSONA_REJECTED_HINT : "";
+}
+
 // Maps a non-OK response from POST /api/live-token to a safe Japanese message.
 // Only the status and an allowlisted error code are used; the response body text is never shown,
 // so provider or account details cannot leak.
-export function tokenErrorMessage(status, code, body) {
+// personaId (optional): the id of the character chosen for this conversation. For a character with a voice, the
+// 502 message for a token that Gemini refused ends with the sentence above. For "standard", or when it is left
+// out, every message is exactly what it was before characters were added.
+export function tokenErrorMessage(status, code, body, personaId) {
   if (status === 401) {
     return "ログインの確認が必要です。ページを再読み込みして、もう一度サインインしてください。";
   }
@@ -60,6 +74,9 @@ export function tokenErrorMessage(status, code, body) {
   }
   if (status === 429) {
     return "短時間に接続しすぎています。しばらく待ってから、もう一度お試しください。";
+  }
+  if (status === 400 && code === "invalid_persona") {
+    return "選んだキャラを認識できませんでした。ページを再読み込みして、「標準」を選んでお試しください。";
   }
   if (status === 503) {
     const base = "サーバーの設定が完了していません。管理者に設定状況を確認してください。";
@@ -71,7 +88,8 @@ export function tokenErrorMessage(status, code, body) {
   }
   if (status === 502) {
     const base = "Gemini Live のトークンを作成できませんでした。しばらくしてから、もう一度お試しください。";
-    return `${base}${geminiFailureHint(body)}`;
+    const refused = body?.reason === "token_upstream_rejected" ? personaRejectedHint(personaId) : "";
+    return `${base}${geminiFailureHint(body)}${refused}`;
   }
   return "セッションを開始できませんでした。しばらくしてから再試行してください。";
 }
