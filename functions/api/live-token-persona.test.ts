@@ -114,7 +114,7 @@ test("the success response is unchanged for every character: token, model, webso
 
 // ---- the three characters with a voice ---------------------------------------------------------------------------------
 
-const VOICES: Array<[string, string]> = [["buddy", "Puck"], ["teacher", "Charon"], ["listener", "Kore"]];
+const VOICES: Array<[string, string]> = [["buddy", "Pulcherrima"], ["teacher", "Algieba"], ["listener", "Despina"]];
 
 test("each character with a voice puts that voice, and only that, into the body sent to Google", async () => {
   for (const [persona, voice] of VOICES) {
@@ -201,7 +201,7 @@ test("a voice name, a model, or any other extra field in the body is not used", 
   });
   const { res, googleCalls } = await run({ body });
   assert.equal(res.status, 200);
-  assert.equal(normalize(googleCalls[0].body), voicedTemplate("Puck"));
+  assert.equal(normalize(googleCalls[0].body), voicedTemplate("Pulcherrima"));
 });
 
 test("extra fields without a persona give the standard body, and nothing in them is used", async () => {
@@ -287,7 +287,7 @@ const padded = (size: number) => {
 test("a body of 1 KB is accepted; a body over 1 KB is refused with 413 payload_too_large and Google is not called", async () => {
   const ok = await run({ body: padded(1024) });
   assert.equal(ok.res.status, 200);
-  assert.equal(normalize(ok.googleCalls[0].body), voicedTemplate("Puck"));
+  assert.equal(normalize(ok.googleCalls[0].body), voicedTemplate("Pulcherrima"));
 
   const tooBig = await run({ body: padded(1025) });
   assert.equal(tooBig.res.status, 413);
