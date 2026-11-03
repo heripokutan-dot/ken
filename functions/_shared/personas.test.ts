@@ -15,14 +15,14 @@ const NOT_AN_ID: unknown[] = [
 
 // ---- the table ------------------------------------------------------------------------------------------------------
 
-test("the server table has the four characters, in order, with the agreed experimental voices", () => {
+test("the server table has the four characters, in order, with the agreed voices", () => {
   assert.deepEqual(
     PERSONAS.map((persona) => ({ ...persona })),
     [
       { id: "standard", voiceName: null },
-      { id: "buddy", voiceName: "Puck" },
-      { id: "teacher", voiceName: "Charon" },
-      { id: "listener", voiceName: "Kore" },
+      { id: "buddy", voiceName: "Pulcherrima" },
+      { id: "teacher", voiceName: "Algieba" },
+      { id: "listener", voiceName: "Despina" },
     ],
   );
 });

@@ -25,9 +25,9 @@ const SETUP_BEFORE =
 
 const AGREED = [
   { id: "standard", label: "標準", voiceName: null, instruction: "" },
-  { id: "buddy", label: "相棒", voiceName: "Puck", instruction: "明るく積極的に話し、返事は短く、話を前に進める。" },
-  { id: "teacher", label: "先生", voiceName: "Charon", instruction: `落ち着いて丁寧に話し、必要に応じて例え話で説明する。${PRIORITY}` },
-  { id: "listener", label: "聞き役", voiceName: "Kore", instruction: `穏やかに話し、まず受け止めてから、質問を一つ返す。${PRIORITY}` },
+  { id: "buddy", label: "相棒", voiceName: "Pulcherrima", instruction: "明るく積極的に話し、返事は短く、話を前に進める。" },
+  { id: "teacher", label: "先生", voiceName: "Algieba", instruction: `落ち着いて丁寧に話し、必要に応じて例え話で説明する。${PRIORITY}` },
+  { id: "listener", label: "聞き役", voiceName: "Despina", instruction: `穏やかに話し、まず受け止めてから、質問を一つ返す。${PRIORITY}` },
 ];
 
 // Anything that is not exactly one of the four ids. Several of these are what a tampered or damaged saved value could be.

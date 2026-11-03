@@ -2,15 +2,24 @@
 // instruction. "standard" is the default: it asks for no voice and adds nothing, so its setup message is the same
 // as it was before characters existed.
 //
-// EXPERIMENT (temporary change, to see whether a voice takes effect at all):
-// The voice names below were swapped from Pulcherrima / Algieba / Despina (buddy / teacher / listener) to
-// Puck / Charon / Kore. They are names that appear in Google's general voice list, chosen from general knowledge and
-// NOT checked against the official list. Whether they work with gemini-3.8-live is not confirmed.
+// Voices: buddy = Pulcherrima, teacher = Algieba, listener = Despina; standard has none.
+// The same table is kept in functions/_shared/personas.ts (a test compares the two). Change both together.
 //
-// NOT CONFIRMED for gemini-3.8-live (see docs/project-status.md):
-//   - that these voice names exist for that model, and
-//   - that a voice is accepted at generationConfig.speechConfig.voiceConfig.prebuiltVoiceConfig.voiceName at all.
-// If a voice does not work, Google closes the socket and the page shows the close code; "standard" always works as before.
+// Where the voice has to be: a voice sent only in the browser's setup message (the speechConfig built from this table)
+// did NOT change the voice. A voice put into the short-lived Gemini token did. The server does that from the character's
+// id, so the page also sends the id when it asks for the token (never the voice name), and still sends the same voice in
+// the setup message. Why the token matters is NOT CONFIRMED.
+//
+// NOT CONFIRMED (see docs/project-status.md):
+//   - Algieba is not confirmed against Google's official list of voices. A name must not be changed on a guess; if one is
+//     not accepted, a real device shows it.
+//   - how far the token's lock reaches, and what happens if the token and the browser's setup disagree.
+//
+// When a voice does not work, read what the page shows:
+//   - an error right after the conversation starts (the token request was refused): the token could not be issued;
+//   - the connection closes before the setup finishes (a close code and reason are shown): the connection was refused;
+//   - no error, but the voice sounds like "standard": the voice setting has no effect.
+// "standard" always works as before.
 //
 // A choice is kept (and remembered on the phone) as one of these ids, never as a voice name or as Japanese text.
 
@@ -21,19 +30,19 @@ export const PERSONAS = Object.freeze([
   Object.freeze({
     id: "buddy",
     label: "相棒",
-    voiceName: "Puck",
+    voiceName: "Pulcherrima",
     instruction: "明るく積極的に話し、返事は短く、話を前に進める。",
   }),
   Object.freeze({
     id: "teacher",
     label: "先生",
-    voiceName: "Charon",
+    voiceName: "Algieba",
     instruction: `落ち着いて丁寧に話し、必要に応じて例え話で説明する。${PRIORITY}`,
   }),
   Object.freeze({
     id: "listener",
     label: "聞き役",
-    voiceName: "Kore",
+    voiceName: "Despina",
     instruction: `穏やかに話し、まず受け止めてから、質問を一つ返す。${PRIORITY}`,
   }),
 ]);
