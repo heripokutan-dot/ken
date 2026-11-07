@@ -5,6 +5,7 @@ import { getPersona, readStoredPersonaId, writeStoredPersonaId } from "./persona
 import { createTranscriptRecorder } from "./transcript-recorder.js";
 import { createNoteSaver, postNote } from "./notes-client.js";
 import { createNotesApi, createNotesPanel } from "./notes-list-client.js";
+import { appendPastNotes, loadPastNotes, readStoredUsePastNotes, writeStoredUsePastNotes } from "./past-notes.js";
 
 const statusElement = document.querySelector("#status");
 const statusText = document.querySelector("#status-text");
@@ -18,6 +19,9 @@ const personaSelect = document.querySelector("#persona-select");
 const historyNoteElement = document.querySelector("#history-note");
 const autoSaveRow = document.querySelector("#autosave-row");
 const autoSaveSwitch = document.querySelector("#autosave-switch");
+const pastNotesRow = document.querySelector("#pastnotes-row");
+const pastNotesSwitch = document.querySelector("#pastnotes-switch");
+const pastNotesStatus = document.querySelector("#pastnotes-status");
 const noteSaveBox = document.querySelector("#note-save-box");
 const noteSaveMessage = document.querySelector("#note-save-message");
 const noteSaveRetry = document.querySelector("#note-save-retry");
@@ -69,6 +73,7 @@ let mutedCaptureGain = null;
 let scheduledPlayback = new Set();
 let nextPlaybackTime = 0;
 let suppressPlayback = false;
+let pastNotesBlock = ""; // the text for the setup message; only held between the start and the moment it is sent
 let committedInputTranscript = "";
 let interimInputTranscript = "";
 let outputTranscript = "";
@@ -329,7 +334,9 @@ function connectWebSocket(token, model, websocketBaseUrl, runId, persona) {
         return;
       }
       const setup = buildSetupMessage(model, SYSTEM_INSTRUCTION, { voiceName: persona.voiceName, extraInstruction: persona.instruction });
+      appendPastNotes(setup, pastNotesBlock);
       activeSocket.send(JSON.stringify(setup));
+      pastNotesBlock = "";
     });
 
     // Messages are decoded asynchronously (binary frames), so process them strictly in arrival order.
@@ -382,9 +389,12 @@ function connectWebSocket(token, model, websocketBaseUrl, runId, persona) {
 async function startSession() {
   if (isStarting || isConnected) return;
   const persona = getPersona(personaSelect.value); // the choice made when the conversation starts is the one used
+  const usePastNotes = authRequired && pastNotesSwitch.checked; // read once, here; only the hosted version can have it on
   const runId = ++lifecycle;
   isStarting = true;
   clearError();
+  pastNotesStatus.textContent = "";
+  pastNotesBlock = "";
   resetTranscripts();
   transcriptRecorder.reset();
   noteSaver.reset();
@@ -395,6 +405,9 @@ async function startSession() {
     if (!navigator.mediaDevices?.getUserMedia || !window.AudioContext || !window.AudioWorkletNode) {
       throw new Error("このブラウザーは必要な音声機能に対応していません。最新の Chrome または Edge でお試しください。");
     }
+
+    // Only when the switch is on: the notes are read in the background from here, and waited for just before the connection opens.
+    const pastNotesTask = usePastNotes ? loadPastNotes({ getIdToken: () => idToken }) : null;
 
     audioContext = new AudioContext();
     nextPlaybackTime = 0;
@@ -444,8 +457,18 @@ async function startSession() {
     }
     if (runId !== lifecycle) return;
 
+    // The answer always comes (it has its own time limit) and never throws; with no notes the setup message stays as it was.
+    let pastNotesMessage = "";
+    if (pastNotesTask) {
+      const pastNotes = await pastNotesTask;
+      if (runId !== lifecycle) return;
+      pastNotesBlock = pastNotes.block;
+      pastNotesMessage = pastNotes.message;
+    }
+
     await connectWebSocket(tokenData.token, tokenData.model, tokenData.websocket_url, runId, persona);
     if (runId !== lifecycle) return;
+    pastNotesStatus.textContent = pastNotesMessage;
 
     await audioContext.audioWorklet.addModule("/pcm-worklet.js");
     if (runId !== lifecycle) return;
@@ -524,6 +547,7 @@ function writeAutoSaveSetting(value) {
 
 function showAutoSaveControls() {
   autoSaveRow.hidden = false;
+  pastNotesRow.hidden = false;
   historyNoteElement.textContent = HOSTED_HISTORY_NOTE;
 }
 
@@ -736,6 +760,11 @@ personaSelect.addEventListener("change", () => {
   personaSelect.value = persona.id;
   writeStoredPersonaId(persona.id);
 });
+pastNotesSwitch.addEventListener("change", () => writeStoredUsePastNotes(pastNotesSwitch.checked));
+// The switch is locked at the same moments as the character menu (updateControls itself is left as it is).
+new MutationObserver(() => {
+  pastNotesSwitch.disabled = personaSelect.disabled;
+}).observe(personaSelect, { attributes: true, attributeFilter: ["disabled"] });
 noteSaveRetry.addEventListener("click", () => void noteSaver.retry());
 notesToggle.addEventListener("click", () => {
   if (notesPanel.getView().open) notesPanel.close();
@@ -757,6 +786,7 @@ notesConfirmYes.addEventListener("click", () => void notesPanel.confirmDelete())
 notesConfirmNo.addEventListener("click", () => void notesPanel.cancelConfirm());
 autoSaveSwitch.checked = readAutoSaveSetting();
 personaSelect.value = readStoredPersonaId();
+pastNotesSwitch.checked = readStoredUsePastNotes();
 
 setStatus("未接続", "idle");
 updateControls();
