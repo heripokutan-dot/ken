@@ -63,6 +63,15 @@
           <p class="help-text">オンのとき、会話が終わると（終了・エラー・切断）、文字起こしがメモとして保存されます。音声は保存されません。</p>
         </div>
 
+        <div id="pastnotes-row" class="autosave-row" hidden>
+          <label class="switch">
+            <input id="pastnotes-switch" type="checkbox">
+            <span>過去のメモを使う</span>
+          </label>
+          <p class="help-text">オンにすると、会話の開始時に、直近のメモ 3 件の抜粋を AI に渡します。メモの内容は、会話と同じ経路で Google に送られます。自動保存がオフだと、メモは増えません。</p>
+          <p id="pastnotes-status" class="help-text" role="status" aria-live="polite"></p>
+        </div>
+
         <div id="note-save" class="note-save" role="status" aria-live="polite">
           <div id="note-save-box" class="note-save-box" hidden>
             <p id="note-save-message" class="note-save-message"></p>
